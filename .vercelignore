@@ -1,0 +1,5 @@
+node_modules
+.next
+preview-*.png
+*.zip
+.git
