@@ -41,7 +41,7 @@ export default function ResetPasswordPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder={t(language, "emailPlaceholder")}
-                className="w-full rounded-md border border-[#d1d5db] px-3 py-2.5 text-sm text-[#374151] outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-[#38a0db]/35"
+                className="w-full rounded-md border border-[#d1d5db] px-3 py-2.5 text-sm text-[#374151] outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-[#6366f1]/35"
               />
               {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
               {sent && !error && (
@@ -56,7 +56,7 @@ export default function ResetPasswordPage() {
             </button>
           </form>
           <div className="mt-6 text-center">
-            <Link href="/login" className="text-sm font-medium text-[#38a0db] hover:underline">
+            <Link href="/login" className="text-sm font-medium text-[#6366f1] hover:underline">
               {t(language, "backToLogin")}
             </Link>
           </div>

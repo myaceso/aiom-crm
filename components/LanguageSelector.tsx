@@ -16,7 +16,7 @@ export default function LanguageSelector() {
         <select
           value={language}
           onChange={(e) => setLanguage(e.target.value as Lang)}
-          className="appearance-none rounded-md border border-[#d1d5db] bg-white py-1.5 pl-3 pr-8 text-sm text-[#374151] outline-none focus:ring-2 focus:ring-[#38a0db]/40"
+          className="appearance-none rounded-md border border-[#d1d5db] bg-white py-1.5 pl-3 pr-8 text-sm text-[#374151] outline-none focus:ring-2 focus:ring-[#6366f1]/40"
           aria-label="Platform language"
         >
           {(Object.keys(langLabels) as Lang[]).map((code) => (

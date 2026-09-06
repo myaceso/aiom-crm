@@ -5,6 +5,11 @@ import type {
   Appointment,
   Activity,
   Settings,
+  SocialConnection,
+  SocialPost,
+  SmsCampaign,
+  EmailCampaign,
+  EmailTemplate,
 } from "./types";
 
 const now = Date.now();
@@ -235,8 +240,8 @@ export function createSeedActivity(): Activity[] {
 
 export const defaultSettings: Settings = {
   companyName: "All In One Marketing",
-  primaryColor: "#38a0db",
-  language: "de",
+  primaryColor: "#6366f1",
+  language: "es",
 };
 
 export const pipelineChartData = [
@@ -264,3 +269,207 @@ export const revenueTrendData = [
   { month: "Aug", revenue: 59000, leads: 128 },
   { month: "Sep", revenue: 63000, leads: 141 },
 ];
+
+export function createSeedSocialConnections(): SocialConnection[] {
+  return [
+    { id: "facebook", name: "Facebook", connected: true, handle: "@AllInOneMarketing" },
+    { id: "instagram", name: "Instagram", connected: true, handle: "@aiom.crm" },
+    { id: "linkedin", name: "LinkedIn", connected: false },
+    { id: "x", name: "X", connected: true, handle: "@aiom_hq" },
+    { id: "tiktok", name: "TikTok", connected: false },
+    { id: "google_business", name: "Google Business", connected: true, handle: "All In One Marketing" },
+  ];
+}
+
+export function createSeedSocialPosts(): SocialPost[] {
+  return [
+    {
+      id: "sp1",
+      body: "🚀 New CRM features are live — SMS, email & social scheduling in one place. Book a demo today!",
+      channels: ["facebook", "instagram", "linkedin"],
+      status: "published",
+      scheduledAt: null,
+      publishedAt: daysAgo(2, 9),
+      createdAt: daysAgo(3),
+    },
+    {
+      id: "sp2",
+      body: "Fall promo: 20% off marketing retainers for local businesses. Limited spots — DM us!",
+      channels: ["instagram", "x"],
+      status: "scheduled",
+      scheduledAt: new Date(now + 2 * 86400000).toISOString(),
+      publishedAt: null,
+      createdAt: daysAgo(1),
+    },
+    {
+      id: "sp3",
+      body: "Behind the scenes at AIOM HQ 🎬 Automating everything so you can grow faster.",
+      channels: ["tiktok", "instagram"],
+      status: "scheduled",
+      scheduledAt: new Date(now + 5 * 86400000).toISOString(),
+      publishedAt: null,
+      createdAt: daysAgo(0, 2),
+    },
+    {
+      id: "sp4",
+      body: "5-star week! Thanks to our clients for the amazing Google reviews ⭐⭐⭐⭐⭐",
+      channels: ["google_business", "facebook"],
+      status: "published",
+      scheduledAt: null,
+      publishedAt: daysAgo(5, 14),
+      createdAt: daysAgo(6),
+    },
+    {
+      id: "sp5",
+      body: "Draft: Webinar invite — Mastering lead nurturing in 2026.",
+      channels: ["linkedin", "x"],
+      status: "draft",
+      scheduledAt: null,
+      publishedAt: null,
+      createdAt: daysAgo(0, 1),
+    },
+  ];
+}
+
+export function createSeedSmsCampaigns(): SmsCampaign[] {
+  return [
+    {
+      id: "sms1",
+      name: "Fall Promo SMS",
+      body: "Hi {{first_name}}! Fall promo: 20% off this month. Reply YES to claim. Msg&data rates may apply. STOP to opt out.",
+      audience: "SMS Opt-in",
+      status: "sent",
+      sent: 8910,
+      delivered: 8724,
+      clicked: 1942,
+      createdAt: daysAgo(10),
+      scheduledAt: null,
+    },
+    {
+      id: "sms2",
+      name: "Review Request",
+      body: "Thanks for choosing us! Leave a quick Google review: {{review_link}} — we appreciate you 💙",
+      audience: "Active Customers",
+      status: "sent",
+      sent: 3104,
+      delivered: 3051,
+      clicked: 1272,
+      createdAt: daysAgo(7),
+      scheduledAt: null,
+    },
+    {
+      id: "sms3",
+      name: "Appointment Reminder",
+      body: "Reminder: your appointment is tomorrow at {{time}}. Reply C to confirm or R to reschedule.",
+      audience: "Upcoming Appointments",
+      status: "scheduled",
+      sent: 0,
+      delivered: 0,
+      clicked: 0,
+      createdAt: daysAgo(1),
+      scheduledAt: new Date(now + 1 * 86400000).toISOString(),
+    },
+    {
+      id: "sms4",
+      name: "Webinar Flash Invite",
+      body: "Last chance! Free webinar tonight 7pm. Join: {{link}}",
+      audience: "Newsletter",
+      status: "draft",
+      sent: 0,
+      delivered: 0,
+      clicked: 0,
+      createdAt: daysAgo(0, 3),
+      scheduledAt: null,
+    },
+  ];
+}
+
+export function createSeedEmailTemplates(): EmailTemplate[] {
+  return [
+    {
+      id: "et1",
+      name: "Welcome Series — Day 1",
+      subject: "Welcome to {{company}} 👋",
+      body: "Hi {{first_name}},\n\nThanks for joining us! Here's how to get started with your CRM in under 10 minutes...\n\nBest,\nThe AIOM Team",
+    },
+    {
+      id: "et2",
+      name: "Promo — Seasonal Offer",
+      subject: "Your exclusive fall offer inside",
+      body: "Hi {{first_name}},\n\nFor a limited time, enjoy 20% off any marketing retainer. Use code FALL20 at checkout.\n\nCheers!",
+    },
+    {
+      id: "et3",
+      name: "Nurture — Case Study",
+      subject: "How Harbor Fitness grew 3× with AIOM",
+      body: "Hi {{first_name}},\n\nMeet Harbor Fitness — they automated follow-ups and booked 40% more appointments in 90 days.\n\nRead the full story →",
+    },
+    {
+      id: "et4",
+      name: "Re-engagement",
+      subject: "We miss you — here's 15% off",
+      body: "Hi {{first_name}},\n\nIt's been a while! Come back and unlock 15% off your next invoice with code MISSYOU.\n\nSee you soon!",
+    },
+  ];
+}
+
+export function createSeedEmailCampaigns(): EmailCampaign[] {
+  return [
+    {
+      id: "em1",
+      name: "Welcome Series",
+      subject: "Welcome to All In One Marketing 👋",
+      body: "Hi {{first_name}},\n\nThanks for joining us! Here's how to get started...",
+      audience: "New Leads (30d)",
+      templateId: "et1",
+      status: "sent",
+      sent: 12482,
+      opened: 4268,
+      clicked: 1284,
+      createdAt: daysAgo(14),
+      scheduledAt: null,
+    },
+    {
+      id: "em2",
+      name: "Webinar Invite",
+      subject: "Join our free webinar: Lead nurturing in 2026",
+      body: "Hi {{first_name}},\n\nSave your seat for Thursday's live session...",
+      audience: "Newsletter",
+      templateId: "et3",
+      status: "scheduled",
+      sent: 0,
+      opened: 0,
+      clicked: 0,
+      createdAt: daysAgo(2),
+      scheduledAt: new Date(now + 3 * 86400000).toISOString(),
+    },
+    {
+      id: "em3",
+      name: "New Lead Nurture",
+      subject: "3 ways to close more deals this month",
+      body: "Hi {{first_name}},\n\nHere are three proven plays our top clients use...",
+      audience: "Hot Leads",
+      templateId: "et3",
+      status: "sent",
+      sent: 6771,
+      opened: 1929,
+      clicked: 612,
+      createdAt: daysAgo(8),
+      scheduledAt: null,
+    },
+    {
+      id: "em4",
+      name: "Fall Promo Blast",
+      subject: "Your exclusive fall offer inside",
+      body: "Hi {{first_name}},\n\nFor a limited time, enjoy 20% off...",
+      audience: "All Contacts",
+      templateId: "et2",
+      status: "draft",
+      sent: 0,
+      opened: 0,
+      clicked: 0,
+      createdAt: daysAgo(0, 4),
+      scheduledAt: null,
+    },
+  ];
+}

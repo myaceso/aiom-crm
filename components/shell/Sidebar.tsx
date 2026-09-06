@@ -10,7 +10,6 @@ import {
   Users,
   Banknote,
   Sparkles,
-  Send,
   Play,
   Globe,
   Star,
@@ -21,6 +20,9 @@ import {
   AlertCircle,
   Zap,
   Search,
+  Share2,
+  MessageCircle,
+  Mail,
 } from "lucide-react";
 import Logo from "@/components/Logo";
 import { t, type DictKey } from "@/lib/i18n";
@@ -40,7 +42,9 @@ const primary: NavItem[] = [
 
 const secondary: NavItem[] = [
   { href: "/dashboard/ai-assistants", key: "aiAssistants", icon: Sparkles },
-  { href: "/dashboard/marketing", key: "marketing", icon: Send },
+  { href: "/dashboard/marketing", key: "marketing", icon: Share2 },
+  { href: "/dashboard/sms-marketing", key: "smsMarketing", icon: MessageCircle },
+  { href: "/dashboard/email-marketing", key: "emailMarketing", icon: Mail },
   { href: "/dashboard/automation", key: "automation", icon: Play },
   { href: "/dashboard/sites", key: "sites", icon: Globe },
   { href: "/dashboard/reputation", key: "reputation", icon: Star },
@@ -69,12 +73,17 @@ export default function Sidebar() {
         className={clsx(
           "mx-2 flex items-center gap-3 rounded-md px-2.5 py-2 text-[13px] font-medium transition",
           active
-            ? "bg-[#e11d48] font-semibold text-white shadow-sm"
-            : "text-[#607179] hover:bg-slate-50"
+            ? "bg-[var(--brand)] font-semibold text-white shadow-sm"
+            : "text-[#64748b] hover:bg-slate-50"
         )}
         title={t(language, item.key)}
       >
-        <Icon className={clsx("h-[18px] w-[18px] shrink-0", active ? "text-white" : "text-[#94a3b8]")} />
+        <Icon
+          className={clsx(
+            "h-[18px] w-[18px] shrink-0",
+            active ? "text-white" : "text-[#94a3b8]"
+          )}
+        />
         {!collapsed && <span className="truncate">{t(language, item.key)}</span>}
       </Link>
     );
@@ -136,8 +145,8 @@ export default function Sidebar() {
           )}
           style={{
             backgroundColor: pathname.startsWith("/dashboard/start-here")
-              ? "#0A1629"
-              : "#e11d48",
+              ? "#0f172a"
+              : "var(--brand)",
           }}
           title={t(language, "startHere")}
         >

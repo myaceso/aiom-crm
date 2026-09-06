@@ -1,4 +1,4 @@
-export type Lang = "en" | "es" | "de";
+export type Lang = "en" | "es";
 
 export type Contact = {
   id: string;
@@ -82,4 +82,70 @@ export type Settings = {
   companyName: string;
   primaryColor: string;
   language: Lang;
+};
+
+export type SocialNetworkId =
+  | "facebook"
+  | "instagram"
+  | "linkedin"
+  | "x"
+  | "tiktok"
+  | "google_business";
+
+export type SocialConnection = {
+  id: SocialNetworkId;
+  name: string;
+  connected: boolean;
+  handle?: string;
+};
+
+export type SocialPostStatus = "draft" | "scheduled" | "published";
+
+export type SocialPost = {
+  id: string;
+  body: string;
+  channels: SocialNetworkId[];
+  status: SocialPostStatus;
+  scheduledAt: string | null;
+  publishedAt: string | null;
+  createdAt: string;
+};
+
+export type SmsCampaignStatus = "draft" | "scheduled" | "sent";
+
+export type SmsCampaign = {
+  id: string;
+  name: string;
+  body: string;
+  audience: string;
+  status: SmsCampaignStatus;
+  sent: number;
+  delivered: number;
+  clicked: number;
+  createdAt: string;
+  scheduledAt: string | null;
+};
+
+export type EmailCampaignStatus = "draft" | "scheduled" | "sent";
+
+export type EmailCampaign = {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+  audience: string;
+  templateId?: string;
+  status: EmailCampaignStatus;
+  sent: number;
+  opened: number;
+  clicked: number;
+  createdAt: string;
+  scheduledAt: string | null;
+};
+
+export type EmailTemplate = {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
 };

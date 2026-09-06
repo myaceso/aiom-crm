@@ -12,6 +12,12 @@ import type {
   Stage,
   Lang,
   Note,
+  SocialConnection,
+  SocialPost,
+  SocialNetworkId,
+  SmsCampaign,
+  EmailCampaign,
+  EmailTemplate,
 } from "@/lib/types";
 import {
   createSeedContacts,
@@ -19,6 +25,11 @@ import {
   createSeedConversations,
   createSeedAppointments,
   createSeedActivity,
+  createSeedSocialConnections,
+  createSeedSocialPosts,
+  createSeedSmsCampaigns,
+  createSeedEmailCampaigns,
+  createSeedEmailTemplates,
   defaultSettings,
 } from "@/lib/seed";
 
@@ -46,6 +57,34 @@ type Store = {
   appointments: Appointment[];
   addAppointment: (a: Omit<Appointment, "id">) => void;
   activity: Activity[];
+  socialConnections: SocialConnection[];
+  toggleSocialConnection: (id: SocialNetworkId) => void;
+  socialPosts: SocialPost[];
+  addSocialPost: (p: {
+    body: string;
+    channels: SocialNetworkId[];
+    status: SocialPost["status"];
+    scheduledAt: string | null;
+  }) => void;
+  smsCampaigns: SmsCampaign[];
+  addSmsCampaign: (c: {
+    name: string;
+    body: string;
+    audience: string;
+    status: SmsCampaign["status"];
+    scheduledAt: string | null;
+  }) => void;
+  emailCampaigns: EmailCampaign[];
+  emailTemplates: EmailTemplate[];
+  addEmailCampaign: (c: {
+    name: string;
+    subject: string;
+    body: string;
+    audience: string;
+    templateId?: string;
+    status: EmailCampaign["status"];
+    scheduledAt: string | null;
+  }) => void;
   toast: Toast;
   showToast: (message: string) => void;
   clearToast: () => void;
@@ -130,7 +169,14 @@ export const useStore = create<Store>()(
       moveOpportunity: (id, stage) =>
         set((s) => ({
           opportunities: s.opportunities.map((o) =>
-            o.id === id ? { ...o, stage, probability: stage === "won" ? 100 : stage === "lost" ? 0 : o.probability } : o
+            o.id === id
+              ? {
+                  ...o,
+                  stage,
+                  probability:
+                    stage === "won" ? 100 : stage === "lost" ? 0 : o.probability,
+                }
+              : o
           ),
         })),
       conversations: [],
@@ -164,6 +210,79 @@ export const useStore = create<Store>()(
           appointments: [{ ...a, id: uid() }, ...s.appointments],
         })),
       activity: [],
+      socialConnections: [],
+      toggleSocialConnection: (id) =>
+        set((s) => ({
+          socialConnections: s.socialConnections.map((c) =>
+            c.id === id
+              ? {
+                  ...c,
+                  connected: !c.connected,
+                  handle: !c.connected
+                    ? c.handle || `@aiom_${c.id}`
+                    : c.handle,
+                }
+              : c
+          ),
+        })),
+      socialPosts: [],
+      addSocialPost: (p) =>
+        set((s) => ({
+          socialPosts: [
+            {
+              id: uid(),
+              body: p.body,
+              channels: p.channels,
+              status: p.status,
+              scheduledAt: p.scheduledAt,
+              publishedAt:
+                p.status === "published" ? new Date().toISOString() : null,
+              createdAt: new Date().toISOString(),
+            },
+            ...s.socialPosts,
+          ],
+        })),
+      smsCampaigns: [],
+      addSmsCampaign: (c) =>
+        set((s) => ({
+          smsCampaigns: [
+            {
+              id: uid(),
+              name: c.name,
+              body: c.body,
+              audience: c.audience,
+              status: c.status,
+              sent: c.status === "sent" ? 1250 : 0,
+              delivered: c.status === "sent" ? 1210 : 0,
+              clicked: c.status === "sent" ? 186 : 0,
+              createdAt: new Date().toISOString(),
+              scheduledAt: c.scheduledAt,
+            },
+            ...s.smsCampaigns,
+          ],
+        })),
+      emailCampaigns: [],
+      emailTemplates: [],
+      addEmailCampaign: (c) =>
+        set((s) => ({
+          emailCampaigns: [
+            {
+              id: uid(),
+              name: c.name,
+              subject: c.subject,
+              body: c.body,
+              audience: c.audience,
+              templateId: c.templateId,
+              status: c.status,
+              sent: c.status === "sent" ? 2400 : 0,
+              opened: c.status === "sent" ? 840 : 0,
+              clicked: c.status === "sent" ? 210 : 0,
+              createdAt: new Date().toISOString(),
+              scheduledAt: c.scheduledAt,
+            },
+            ...s.emailCampaigns,
+          ],
+        })),
       toast: null,
       showToast: (message) => {
         const id = uid();
@@ -177,16 +296,31 @@ export const useStore = create<Store>()(
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       ensureSeed: () => {
         const s = get();
+        const patch: Partial<Store> = {};
         if (s.contacts.length === 0) {
           const contacts = createSeedContacts();
-          set({
-            contacts,
-            opportunities: createSeedOpportunities(contacts),
-            conversations: createSeedConversations(contacts),
-            appointments: createSeedAppointments(),
-            activity: createSeedActivity(),
-          });
+          patch.contacts = contacts;
+          patch.opportunities = createSeedOpportunities(contacts);
+          patch.conversations = createSeedConversations(contacts);
+          patch.appointments = createSeedAppointments();
+          patch.activity = createSeedActivity();
         }
+        if (s.socialConnections.length === 0) {
+          patch.socialConnections = createSeedSocialConnections();
+        }
+        if (s.socialPosts.length === 0) {
+          patch.socialPosts = createSeedSocialPosts();
+        }
+        if (s.smsCampaigns.length === 0) {
+          patch.smsCampaigns = createSeedSmsCampaigns();
+        }
+        if (s.emailTemplates.length === 0) {
+          patch.emailTemplates = createSeedEmailTemplates();
+        }
+        if (s.emailCampaigns.length === 0) {
+          patch.emailCampaigns = createSeedEmailCampaigns();
+        }
+        if (Object.keys(patch).length) set(patch);
       },
     }),
     {
@@ -199,9 +333,17 @@ export const useStore = create<Store>()(
         conversations: s.conversations,
         appointments: s.appointments,
         activity: s.activity,
+        socialConnections: s.socialConnections,
+        socialPosts: s.socialPosts,
+        smsCampaigns: s.smsCampaigns,
+        emailCampaigns: s.emailCampaigns,
+        emailTemplates: s.emailTemplates,
         sidebarCollapsed: s.sidebarCollapsed,
       }),
       onRehydrateStorage: () => (state) => {
+        if (state && (state.settings.language as string) === "de") {
+          state.updateSettings({ language: "es" });
+        }
         state?.setHydrated(true);
         state?.ensureSeed();
       },

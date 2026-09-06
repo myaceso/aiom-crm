@@ -20,7 +20,7 @@ import {
 } from "@/lib/seed";
 import { useStore } from "@/store/useStore";
 
-const COLORS = ["#38a0db", "#60a5fa", "#34d399", "#fbbf24", "#a78bfa", "#f87171"];
+const COLORS = ["#6366f1", "#818cf8", "#34d399", "#fbbf24", "#a78bfa", "#f87171"];
 
 export default function DashboardPage() {
   const language = useStore((s) => s.settings.language);

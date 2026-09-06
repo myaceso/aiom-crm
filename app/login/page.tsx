@@ -40,7 +40,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#f2f7fa]">
+    <div className="flex min-h-screen flex-col bg-[#f8fafc]">
       <AuthHeader />
       <main className="flex flex-1 items-center justify-center px-4 py-10">
         <div className="w-full max-w-[440px] rounded-lg bg-white p-8 shadow-card sm:p-10">
@@ -57,7 +57,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder={t(language, "emailPlaceholder")}
-                className="w-full rounded-md border border-[#d1d5db] px-3 py-2.5 text-sm text-[#374151] outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-[#38a0db]/35"
+                className="w-full rounded-md border border-[#d1d5db] px-3 py-2.5 text-sm text-[#374151] outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-[#6366f1]/35"
                 autoComplete="email"
               />
             </div>
@@ -71,7 +71,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={t(language, "passwordPlaceholder")}
-                  className="w-full rounded-md border border-[#d1d5db] px-3 py-2.5 pr-10 text-sm text-[#374151] outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-[#38a0db]/35"
+                  className="w-full rounded-md border border-[#d1d5db] px-3 py-2.5 pr-10 text-sm text-[#374151] outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-[#6366f1]/35"
                   autoComplete="current-password"
                 />
                 <button
@@ -86,7 +86,7 @@ export default function LoginPage() {
               <div className="mt-2 flex justify-end">
                 <Link
                   href="/reset-password"
-                  className="text-sm font-medium text-[#38a0db] hover:underline"
+                  className="text-sm font-medium text-[#6366f1] hover:underline"
                 >
                   {t(language, "forgotPassword")}
                 </Link>
@@ -102,7 +102,7 @@ export default function LoginPage() {
           </form>
           <p className="mt-6 text-center text-xs leading-relaxed text-[#607179]">
             {t(language, "terms")}{" "}
-            <a href="#" className="font-medium text-[#38a0db] hover:underline">
+            <a href="#" className="font-medium text-[#6366f1] hover:underline">
               {t(language, "termsLink")}
             </a>
             .
