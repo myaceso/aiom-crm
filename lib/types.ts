@@ -99,6 +99,8 @@ export type SocialConnection = {
   handle?: string;
   profileUrl?: string;
   accessToken?: string;
+  /** Facebook Page ID (and/or used to resolve IG Business account) */
+  pageId?: string;
 };
 
 export type SocialPostStatus = "draft" | "scheduled" | "published";

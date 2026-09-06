@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { t } from "@/lib/i18n";
 import type { EmailProvider, SocialNetworkId } from "@/lib/types";
+import { isValidProfileUrl, normalizeProfileUrl } from "@/lib/social";
 import { useStore } from "@/store/useStore";
 import clsx from "clsx";
 
@@ -73,18 +74,35 @@ export default function IntegrationsPage() {
 
   function onConnectSocial(id: SocialNetworkId) {
     const c = connections.find((x) => x.id === id);
-    if (!c) return;
-    if (!c.handle?.trim() && !c.profileUrl?.trim()) {
-      showToast(t(language, "requiredFields"));
+    const name = c?.name || id;
+    const handle = (c?.handle || "").trim();
+    let profileUrl = (c?.profileUrl || "").trim();
+
+    if (!handle && !profileUrl) {
+      showToast(t(language, "socialHandleOrUrlRequired"));
       return;
     }
+
+    if (profileUrl) {
+      profileUrl = normalizeProfileUrl(profileUrl);
+      if (!isValidProfileUrl(profileUrl)) {
+        showToast(t(language, "invalidProfileUrl"));
+        return;
+      }
+      // Persist normalized URL into draft before connect
+      if (c && profileUrl !== (c.profileUrl || "").trim()) {
+        updateSocialDraft(id, { profileUrl });
+      }
+    }
+
     connectSocial(id, {
-      handle: c.handle,
-      profileUrl: c.profileUrl,
-      accessToken: c.accessToken,
+      handle,
+      profileUrl,
+      accessToken: c?.accessToken || "",
+      pageId: c?.pageId || "",
     });
     showToast(
-      language === "es" ? `${c.name} conectado` : `${c.name} connected`
+      language === "es" ? `${name} conectado` : `${name} connected`
     );
   }
 
@@ -246,7 +264,7 @@ export default function IntegrationsPage() {
                     </div>
                     {c.connected && c.profileUrl ? (
                       <a
-                        href={c.profileUrl}
+                        href={normalizeProfileUrl(c.profileUrl)}
                         target="_blank"
                         rel="noreferrer"
                         className="mt-0.5 inline-flex items-center gap-1 text-xs text-[var(--brand)] hover:underline"
@@ -273,7 +291,7 @@ export default function IntegrationsPage() {
                             : `${c.name} disconnected`
                         );
                       }}
-                      className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                      className="min-h-[36px] shrink-0 rounded-md border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
                     >
                       {t(language, "disconnect")}
                     </button>
@@ -281,7 +299,7 @@ export default function IntegrationsPage() {
                     <button
                       type="button"
                       onClick={() => onConnectSocial(c.id)}
-                      className="brand-bg rounded-md px-3 py-1.5 text-xs font-semibold text-white"
+                      className="brand-bg min-h-[36px] shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold text-white"
                     >
                       {t(language, "connect")}
                     </button>
@@ -316,9 +334,30 @@ export default function IntegrationsPage() {
                       className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--brand)]/30 disabled:bg-slate-50"
                     />
                   </div>
+                  {(c.id === "facebook" || c.id === "instagram") && (
+                    <div className="sm:col-span-2">
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        {t(language, "pageId")}
+                      </label>
+                      <input
+                        value={c.pageId || ""}
+                        disabled={c.connected}
+                        onChange={(e) =>
+                          updateSocialDraft(c.id, { pageId: e.target.value })
+                        }
+                        placeholder="1234567890"
+                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--brand)]/30 disabled:bg-slate-50"
+                      />
+                      <p className="mt-1 text-[11px] leading-snug text-slate-400">
+                        {t(language, "pageIdHelp")}
+                      </p>
+                    </div>
+                  )}
                   <div className="sm:col-span-2">
                     <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      {t(language, "accessTokenOptional")}
+                      {c.id === "facebook" || c.id === "instagram"
+                        ? t(language, "accessTokenRequired")
+                        : t(language, "accessTokenOptional")}
                     </label>
                     <input
                       type="password"
@@ -330,6 +369,11 @@ export default function IntegrationsPage() {
                       autoComplete="off"
                       className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--brand)]/30 disabled:bg-slate-50"
                     />
+                    {(c.id === "facebook" || c.id === "instagram") && (
+                      <p className="mt-1 text-[11px] leading-snug text-slate-400">
+                        {t(language, "accessTokenHelp")}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

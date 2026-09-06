@@ -37,6 +37,10 @@ import {
   defaultSettings,
   defaultIntegrations,
 } from "@/lib/seed";
+import {
+  buildConnectedSocial,
+  mergeSocialConnections,
+} from "@/lib/social";
 
 type Toast = { id: string; message: string } | null;
 
@@ -65,12 +69,19 @@ type Store = {
   socialConnections: SocialConnection[];
   connectSocial: (
     id: SocialNetworkId,
-    data: { handle?: string; profileUrl?: string; accessToken?: string }
+    data: {
+      handle?: string;
+      profileUrl?: string;
+      accessToken?: string;
+      pageId?: string;
+    }
   ) => void;
   disconnectSocial: (id: SocialNetworkId) => void;
   updateSocialDraft: (
     id: SocialNetworkId,
-    data: Partial<Pick<SocialConnection, "handle" | "profileUrl" | "accessToken">>
+    data: Partial<
+      Pick<SocialConnection, "handle" | "profileUrl" | "accessToken" | "pageId">
+    >
   ) => void;
   socialPosts: SocialPost[];
   mediaAssets: MediaAsset[];
@@ -237,31 +248,31 @@ export const useStore = create<Store>()(
       activity: [],
       socialConnections: [],
       connectSocial: (id, data) =>
-        set((s) => ({
-          socialConnections: s.socialConnections.map((c) =>
-            c.id === id
-              ? {
-                  ...c,
-                  connected: true,
-                  handle: data.handle?.trim() || c.handle || "",
-                  profileUrl: data.profileUrl?.trim() || c.profileUrl || "",
-                  accessToken: data.accessToken ?? c.accessToken ?? "",
-                }
-              : c
-          ),
-        })),
+        set((s) => {
+          const merged = mergeSocialConnections(s.socialConnections);
+          const existing = merged.find((c) => c.id === id);
+          const updated = buildConnectedSocial(id, existing, data);
+          return {
+            socialConnections: merged.map((c) =>
+              c.id === id ? updated : c
+            ),
+          };
+        }),
       disconnectSocial: (id) =>
-        set((s) => ({
-          socialConnections: s.socialConnections.map((c) =>
-            c.id === id
-              ? {
-                  ...c,
-                  connected: false,
-                  accessToken: "",
-                }
-              : c
-          ),
-        })),
+        set((s) => {
+          const merged = mergeSocialConnections(s.socialConnections);
+          return {
+            socialConnections: merged.map((c) =>
+              c.id === id
+                ? {
+                    ...c,
+                    connected: false,
+                    accessToken: "",
+                  }
+                : c
+            ),
+          };
+        }),
       updateSocialDraft: (id, data) =>
         set((s) => ({
           socialConnections: s.socialConnections.map((c) =>
@@ -418,19 +429,21 @@ export const useStore = create<Store>()(
           patch.appointments = createSeedAppointments();
           patch.activity = createSeedActivity();
         }
-        if (s.socialConnections.length === 0) {
-          patch.socialConnections = createSeedSocialConnections();
-        } else if (
-          s.socialConnections.some(
-            (c) => c.profileUrl === undefined || c.accessToken === undefined
-          )
-        ) {
-          patch.socialConnections = s.socialConnections.map((c) => ({
-            ...c,
-            handle: c.handle || "",
-            profileUrl: c.profileUrl ?? "",
-            accessToken: c.accessToken ?? "",
-          }));
+        {
+          const merged = mergeSocialConnections(s.socialConnections || []);
+          const needsMerge =
+            s.socialConnections.length === 0 ||
+            s.socialConnections.length !== merged.length ||
+            s.socialConnections.some(
+              (c) =>
+                c.profileUrl === undefined ||
+                c.accessToken === undefined ||
+                c.handle === undefined ||
+                c.pageId === undefined
+            );
+          if (needsMerge) {
+            patch.socialConnections = merged;
+          }
         }
         if (s.socialPosts.length === 0) {
           patch.socialPosts = createSeedSocialPosts();

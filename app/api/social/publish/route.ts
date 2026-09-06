@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import {
+  publishToChannels,
+  type MediaFile,
+  type PublishConnection,
+} from "@/lib/metaPublish";
 
 type MediaMeta = {
   id?: string;
@@ -13,90 +18,96 @@ type Body = {
   channels?: string[];
   media?: MediaMeta[];
   mediaCount?: number;
-  connections?: Array<{
-    id: string;
-    connected?: boolean;
-    handle?: string;
-    profileUrl?: string;
-    accessToken?: string;
-  }>;
+  connections?: PublishConnection[];
+  lang?: string;
 };
+
+function metaTokenHint(lang?: string) {
+  return lang === "es"
+    ? "Conecta un Access Token de Meta (Facebook/Instagram) para publicar de verdad"
+    : "Connect a Meta Access Token (Facebook/Instagram) to publish for real";
+}
 
 export async function POST(req: Request) {
   const contentType = req.headers.get("content-type") || "";
 
-  let payload: Body = {};
-  let mediaFromForm: MediaMeta[] = [];
+  let text = "";
+  let channels: string[] = [];
+  let connections: PublishConnection[] = [];
+  let lang = "en";
+  const mediaFiles: MediaFile[] = [];
 
   try {
     if (contentType.includes("multipart/form-data")) {
       const form = await req.formData();
-      const bodyText = String(form.get("body") || "");
-      const channelsRaw = String(form.get("channels") || "[]");
-      const connectionsRaw = String(form.get("connections") || "[]");
-      const mediaMetaRaw = String(form.get("mediaMeta") || "[]");
-      let channels: string[] = [];
-      let connections: Body["connections"] = [];
-      let mediaMeta: MediaMeta[] = [];
+      text = String(form.get("body") || "").trim();
+      lang = String(form.get("lang") || "en");
       try {
-        channels = JSON.parse(channelsRaw);
+        channels = JSON.parse(String(form.get("channels") || "[]"));
       } catch {
         channels = [];
       }
       try {
-        connections = JSON.parse(connectionsRaw);
+        connections = JSON.parse(String(form.get("connections") || "[]"));
       } catch {
         connections = [];
       }
+
+      const files = form.getAll("media").filter((v) => typeof v !== "string") as File[];
+      let mediaMeta: MediaMeta[] = [];
       try {
-        mediaMeta = JSON.parse(mediaMetaRaw);
+        mediaMeta = JSON.parse(String(form.get("mediaMeta") || "[]"));
       } catch {
         mediaMeta = [];
       }
-      // Count attached binary parts (ready for real network upload later)
-      const files = form.getAll("media").filter((v) => typeof v !== "string");
-      mediaFromForm = mediaMeta.length
-        ? mediaMeta
-        : files.map((f, i) => {
-            const file = f as File;
-            return {
-              id: `form-${i}`,
-              kind: file.type.startsWith("video/") ? "video" : "image",
-              name: file.name,
-              size: file.size,
-              mime: file.type,
-            };
-          });
-      payload = { body: bodyText, channels, connections, media: mediaFromForm };
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const meta = mediaMeta[i];
+        const mime = file.type || meta?.mime || "application/octet-stream";
+        const kind: "image" | "video" = mime.startsWith("video/")
+          ? "video"
+          : "image";
+        mediaFiles.push({
+          blob: file,
+          name: file.name || meta?.name || `media-${i}`,
+          mime,
+          kind: (meta?.kind as "image" | "video") || kind,
+        });
+      }
     } else {
-      payload = await req.json();
+      const payload = (await req.json()) as Body;
+      text = (payload.body || "").trim();
+      channels = Array.isArray(payload.channels) ? payload.channels : [];
+      connections = Array.isArray(payload.connections)
+        ? payload.connections
+        : [];
+      lang = payload.lang || "en";
+      // JSON-only: no binary media available for upload
     }
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const text = (payload.body || "").trim();
-  const channels = Array.isArray(payload.channels) ? payload.channels : [];
-  const connections = Array.isArray(payload.connections)
-    ? payload.connections
-    : [];
-  const media = Array.isArray(payload.media)
-    ? payload.media
-    : mediaFromForm.length
-      ? mediaFromForm
-      : [];
-  const mediaCount =
-    typeof payload.mediaCount === "number" ? payload.mediaCount : media.length;
-
-  if (!text && mediaCount === 0) {
+  if (!text && mediaFiles.length === 0) {
     return NextResponse.json(
-      { error: "Post body or media is required" },
+      {
+        error:
+          lang === "es"
+            ? "Escribe un mensaje o adjunta medios"
+            : "Post body or media is required",
+      },
       { status: 400 }
     );
   }
-  if (channels.length === 0) {
+  if (!Array.isArray(channels) || channels.length === 0) {
     return NextResponse.json(
-      { error: "Select at least one channel" },
+      {
+        error:
+          lang === "es"
+            ? "Selecciona al menos un canal"
+            : "Select at least one channel",
+      },
       { status: 400 }
     );
   }
@@ -108,31 +119,105 @@ export async function POST(req: Request) {
   if (missing.length > 0) {
     return NextResponse.json(
       {
-        error: "Connect at least one network in Integrations",
+        error:
+          lang === "es"
+            ? "Conecta al menos una red en Integraciones"
+            : "Connect at least one network in Integrations",
         missing,
       },
       { status: 400 }
     );
   }
 
-  // Stub: real Meta/LinkedIn/X APIs later. Record success + media metadata.
-  // Access tokens on connections are available when wiring live publishers.
+  // Gate: Publish Now requires a real Meta token for FB/IG selection
+  const selectedMeta = channels.filter(
+    (ch) => ch === "facebook" || ch === "instagram"
+  );
+  const metaWithoutToken = selectedMeta.filter((ch) => {
+    const c = connections.find((x) => x.id === ch);
+    return !c?.accessToken?.trim();
+  });
+
+  // If user only selected LinkedIn/X/etc., fail clearly (no stub success)
+  const onlyOauth = channels.every(
+    (ch) => !["facebook", "instagram"].includes(ch)
+  );
+  if (onlyOauth) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          lang === "es"
+            ? "LinkedIn/X/TikTok/GBP requieren OAuth de app. Usa Facebook o Instagram con Access Token de Meta."
+            : "LinkedIn/X/TikTok/GBP need app OAuth. Use Facebook or Instagram with a Meta Access Token.",
+        results: channels.map((id) => ({
+          id,
+          ok: false,
+          reason: "needs_oauth_app",
+        })),
+      },
+      { status: 400 }
+    );
+  }
+
+  if (selectedMeta.length > 0 && metaWithoutToken.length === selectedMeta.length) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: metaTokenHint(lang),
+        results: channels.map((id) => ({
+          id,
+          ok: false,
+          reason:
+            id === "facebook" || id === "instagram"
+              ? "needs_meta_token"
+              : "needs_oauth_app",
+        })),
+      },
+      { status: 400 }
+    );
+  }
+
+  const { results, succeeded, failed } = await publishToChannels({
+    body: text,
+    channels,
+    connections,
+    media: mediaFiles,
+  });
+
+  if (succeeded.length === 0) {
+    const tokenFail = results.some((r) => r.reason === "needs_meta_token");
+    const firstDetail =
+      results.find((r) => r.detail)?.detail ||
+      results.find((r) => r.reason)?.reason;
+    return NextResponse.json(
+      {
+        ok: false,
+        error: tokenFail
+          ? metaTokenHint(lang)
+          : firstDetail ||
+            (lang === "es" ? "Error al publicar" : "Publish failed"),
+        results,
+        published: [],
+        failed,
+      },
+      { status: 400 }
+    );
+  }
+
   return NextResponse.json({
     ok: true,
-    mode: "stub",
-    published: channels,
-    mediaIncluded: mediaCount > 0,
-    mediaCount,
-    media: media.map((m) => ({
-      id: m.id,
-      kind: m.kind,
-      name: m.name,
-      size: m.size,
-      mime: m.mime,
-    })),
+    mode: "live",
+    published: succeeded,
+    failed,
+    results,
     message:
-      mediaCount > 0
-        ? `Published with ${mediaCount} media file(s) (stub). Real network APIs can use saved tokens later.`
-        : "Published (stub). Real network APIs can use saved tokens later.",
+      lang === "es"
+        ? `Publicado en: ${succeeded.join(", ")}${
+            failed.length ? ` · Falló: ${failed.join(", ")}` : ""
+          }`
+        : `Published to: ${succeeded.join(", ")}${
+            failed.length ? ` · Failed: ${failed.join(", ")}` : ""
+          }`,
   });
 }

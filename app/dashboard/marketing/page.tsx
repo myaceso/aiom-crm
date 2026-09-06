@@ -23,6 +23,8 @@ import {
   MediaThumb,
   useMediaPreviewHydration,
 } from "@/components/marketing/MediaPicker";
+import { getMediaBlob } from "@/lib/mediaDb";
+import { normalizeProfileUrl } from "@/lib/social";
 
 const NETWORK_ICONS: Record<SocialNetworkId, typeof Facebook> = {
   facebook: Facebook,
@@ -76,7 +78,10 @@ export default function MarketingPage() {
   }, [mediaAssets]);
 
   function toggleChannel(id: SocialNetworkId) {
-    if (!connectedIds.has(id)) return;
+    if (!connectedIds.has(id)) {
+      showToast(t(language, "channelNotConnected"));
+      return;
+    }
     setChannels((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
@@ -95,19 +100,21 @@ export default function MarketingPage() {
       return;
     }
     if (!body.trim() && mediaIds.length === 0) {
-      showToast(language === "es" ? "Escribe un mensaje o adjunta medios" : "Write a post or attach media");
-      return;
-    }
-    if (channels.length === 0) {
       showToast(
         language === "es"
-          ? "Selecciona al menos un canal"
-          : "Select at least one channel"
+          ? "Escribe un mensaje o adjunta medios"
+          : "Write a post or attach media"
       );
       return;
     }
+    if (channels.length === 0) {
+      showToast(t(language, "selectChannelRequired"));
+      return;
+    }
     if (status === "scheduled" && !scheduledAt) {
-      showToast(language === "es" ? "Elige fecha y hora" : "Pick a schedule date");
+      showToast(
+        language === "es" ? "Elige fecha y hora" : "Pick a schedule date"
+      );
       return;
     }
 
@@ -125,39 +132,84 @@ export default function MarketingPage() {
     if (status === "published") {
       setPublishing(true);
       try {
-        const res = await fetch("/api/social/publish", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            body: body.trim(),
-            channels,
-            media: mediaMeta,
-            mediaCount: mediaMeta.length,
-            connections: connections.map((c) => ({
+        const form = new FormData();
+        form.set("body", body.trim());
+        form.set("lang", language);
+        form.set("channels", JSON.stringify(channels));
+        form.set(
+          "connections",
+          JSON.stringify(
+            connections.map((c) => ({
               id: c.id,
               connected: c.connected,
               handle: c.handle,
               profileUrl: c.profileUrl,
               accessToken: c.accessToken,
-            })),
-          }),
+              pageId: c.pageId,
+            }))
+          )
+        );
+        form.set("mediaMeta", JSON.stringify(mediaMeta));
+
+        for (const id of mediaIds) {
+          const meta = mediaById.get(id);
+          const blob = await getMediaBlob(id);
+          if (blob) {
+            form.append(
+              "media",
+              blob,
+              meta?.name || `${id}.${meta?.kind === "video" ? "mp4" : "jpg"}`
+            );
+          }
+        }
+
+        const res = await fetch("/api/social/publish", {
+          method: "POST",
+          body: form,
         });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          showToast(
-            (data as { error?: string }).error || t(language, "publishFailed")
-          );
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          message?: string;
+          ok?: boolean;
+          published?: string[];
+          failed?: string[];
+          results?: Array<{
+            id: string;
+            ok: boolean;
+            reason?: string;
+            detail?: string;
+          }>;
+        };
+
+        if (!res.ok || !data.ok) {
+          const detail =
+            data.error ||
+            data.results?.find((r) => !r.ok)?.detail ||
+            t(language, "publishNeedsMetaToken");
+          showToast(detail);
           return;
         }
+
+        const publishedChannels = data.published?.length
+          ? (data.published as SocialNetworkId[])
+          : channels;
+
         addSocialPost({
           body: body.trim(),
-          channels,
+          channels: publishedChannels,
           status: "published",
           scheduledAt: null,
           mediaIds: [...mediaIds],
         });
         resetComposer();
-        showToast(t(language, "publishSuccess"));
+
+        if (data.failed && data.failed.length > 0) {
+          showToast(
+            `${t(language, "publishPartial")}: ${data.published?.join(", ") || ""} · ${data.failed.join(", ")}`
+          );
+        } else {
+          showToast(data.message || t(language, "publishSuccess"));
+        }
       } catch {
         showToast(t(language, "publishFailed"));
       } finally {
@@ -166,6 +218,7 @@ export default function MarketingPage() {
       return;
     }
 
+    // Schedule / draft — local only (honest)
     addSocialPost({
       body: body.trim(),
       channels,
@@ -177,18 +230,15 @@ export default function MarketingPage() {
     resetComposer();
     showToast(
       status === "scheduled"
-        ? language === "es"
-          ? "Publicación programada"
-          : "Post scheduled"
-        : language === "es"
-          ? "Borrador guardado"
-          : "Draft saved"
+        ? t(language, "scheduleSuccess")
+        : t(language, "draftSuccess")
     );
   }
 
   function onComposer(e: FormEvent) {
     e.preventDefault();
-    void submit(scheduledAt ? "scheduled" : "published");
+    // Enter in form should not silently schedule — default to publish
+    void submit("published");
   }
 
   return (
@@ -260,7 +310,7 @@ export default function MarketingPage() {
                   </div>
                   {c.connected && c.profileUrl && (
                     <a
-                      href={c.profileUrl}
+                      href={normalizeProfileUrl(c.profileUrl)}
                       target="_blank"
                       rel="noreferrer"
                       className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-[var(--brand)] hover:underline"
@@ -349,6 +399,9 @@ export default function MarketingPage() {
               className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--brand)]/30"
             />
           </div>
+          <p className="text-[11px] leading-snug text-slate-400">
+            {t(language, "publishRealOnly")}
+          </p>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
             <button
               type="button"
@@ -367,11 +420,16 @@ export default function MarketingPage() {
               {t(language, "schedulePost")}
             </button>
             <button
-              type="submit"
+              type="button"
+              onClick={() => void submit("published")}
               disabled={!hasConnected || publishing}
               className="brand-bg min-h-[40px] w-full rounded-md px-3 py-2 text-sm font-semibold text-white disabled:opacity-40 sm:w-auto"
             >
-              {t(language, "publishNow")}
+              {publishing
+                ? language === "es"
+                  ? "Publicando…"
+                  : "Publishing…"
+                : t(language, "publishNow")}
             </button>
           </div>
         </form>

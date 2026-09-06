@@ -273,12 +273,12 @@ export const revenueTrendData = [
 
 export function createSeedSocialConnections(): SocialConnection[] {
   return [
-    { id: "facebook", name: "Facebook", connected: false, handle: "", profileUrl: "", accessToken: "" },
-    { id: "instagram", name: "Instagram", connected: false, handle: "", profileUrl: "", accessToken: "" },
-    { id: "linkedin", name: "LinkedIn", connected: false, handle: "", profileUrl: "", accessToken: "" },
-    { id: "x", name: "X", connected: false, handle: "", profileUrl: "", accessToken: "" },
-    { id: "tiktok", name: "TikTok", connected: false, handle: "", profileUrl: "", accessToken: "" },
-    { id: "google_business", name: "Google Business", connected: false, handle: "", profileUrl: "", accessToken: "" },
+    { id: "facebook", name: "Facebook", connected: false, handle: "", profileUrl: "", accessToken: "", pageId: "" },
+    { id: "instagram", name: "Instagram", connected: false, handle: "", profileUrl: "", accessToken: "", pageId: "" },
+    { id: "linkedin", name: "LinkedIn", connected: false, handle: "", profileUrl: "", accessToken: "", pageId: "" },
+    { id: "x", name: "X", connected: false, handle: "", profileUrl: "", accessToken: "", pageId: "" },
+    { id: "tiktok", name: "TikTok", connected: false, handle: "", profileUrl: "", accessToken: "", pageId: "" },
+    { id: "google_business", name: "Google Business", connected: false, handle: "", profileUrl: "", accessToken: "", pageId: "" },
   ];
 }
 
