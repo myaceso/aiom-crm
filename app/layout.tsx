@@ -5,8 +5,8 @@ import ToastHost from "@/components/Toast";
 import ThemeApplier from "@/components/ThemeApplier";
 
 export const metadata: Metadata = {
-  title: "All In One Marketing",
-  description: "All In One Marketing CRM demo",
+  title: "enone",
+  description: "enone — all in one CRM",
 };
 
 export default function RootLayout({

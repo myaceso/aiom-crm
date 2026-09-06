@@ -219,7 +219,7 @@ export const useStore = create<Store>()(
                   ...c,
                   connected: !c.connected,
                   handle: !c.connected
-                    ? c.handle || `@aiom_${c.id}`
+                    ? c.handle || `@enone_${c.id}`
                     : c.handle,
                 }
               : c

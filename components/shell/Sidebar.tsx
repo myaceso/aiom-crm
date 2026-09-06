@@ -100,7 +100,6 @@ export default function Sidebar() {
         {!collapsed ? (
           <>
             <Logo />
-            <p className="mt-0.5 text-[10px] italic text-[#f97316]">automate everything</p>
             <button className="mt-3 flex w-full items-center gap-2 rounded-lg bg-slate-100 px-2 py-1.5 text-left hover:bg-slate-200/70">
               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-300 text-[9px] font-bold text-slate-600">
                 MM

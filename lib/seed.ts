@@ -134,7 +134,7 @@ export function createSeedConversations(contacts: Contact[]): Conversation[] {
       messages: [
         {
           id: `m${i}-1`,
-          body: `Hi ${c.firstName}, thanks for reaching out to All In One Marketing!`,
+          body: `Hi ${c.firstName}, thanks for reaching out to enone!`,
           fromMe: true,
           createdAt: daysAgo(i % 5 + 1, 2),
         },
@@ -239,7 +239,7 @@ export function createSeedActivity(): Activity[] {
 }
 
 export const defaultSettings: Settings = {
-  companyName: "All In One Marketing",
+  companyName: "enone",
   primaryColor: "#6366f1",
   language: "es",
 };
@@ -272,12 +272,12 @@ export const revenueTrendData = [
 
 export function createSeedSocialConnections(): SocialConnection[] {
   return [
-    { id: "facebook", name: "Facebook", connected: true, handle: "@AllInOneMarketing" },
-    { id: "instagram", name: "Instagram", connected: true, handle: "@aiom.crm" },
+    { id: "facebook", name: "Facebook", connected: true, handle: "@enone" },
+    { id: "instagram", name: "Instagram", connected: true, handle: "@enone.app" },
     { id: "linkedin", name: "LinkedIn", connected: false },
-    { id: "x", name: "X", connected: true, handle: "@aiom_hq" },
+    { id: "x", name: "X", connected: true, handle: "@enone" },
     { id: "tiktok", name: "TikTok", connected: false },
-    { id: "google_business", name: "Google Business", connected: true, handle: "All In One Marketing" },
+    { id: "google_business", name: "Google Business", connected: true, handle: "enone" },
   ];
 }
 
@@ -303,7 +303,7 @@ export function createSeedSocialPosts(): SocialPost[] {
     },
     {
       id: "sp3",
-      body: "Behind the scenes at AIOM HQ 🎬 Automating everything so you can grow faster.",
+      body: "Behind the scenes at enone HQ 🎬 All in one CRM so you can grow faster.",
       channels: ["tiktok", "instagram"],
       status: "scheduled",
       scheduledAt: new Date(now + 5 * 86400000).toISOString(),
@@ -390,7 +390,7 @@ export function createSeedEmailTemplates(): EmailTemplate[] {
       id: "et1",
       name: "Welcome Series — Day 1",
       subject: "Welcome to {{company}} 👋",
-      body: "Hi {{first_name}},\n\nThanks for joining us! Here's how to get started with your CRM in under 10 minutes...\n\nBest,\nThe AIOM Team",
+      body: "Hi {{first_name}},\n\nThanks for joining us! Here's how to get started with your CRM in under 10 minutes...\n\nBest,\nThe enone Team",
     },
     {
       id: "et2",
@@ -401,7 +401,7 @@ export function createSeedEmailTemplates(): EmailTemplate[] {
     {
       id: "et3",
       name: "Nurture — Case Study",
-      subject: "How Harbor Fitness grew 3× with AIOM",
+      subject: "How Harbor Fitness grew 3× with enone",
       body: "Hi {{first_name}},\n\nMeet Harbor Fitness — they automated follow-ups and booked 40% more appointments in 90 days.\n\nRead the full story →",
     },
     {
@@ -418,7 +418,7 @@ export function createSeedEmailCampaigns(): EmailCampaign[] {
     {
       id: "em1",
       name: "Welcome Series",
-      subject: "Welcome to All In One Marketing 👋",
+      subject: "Welcome to enone 👋",
       body: "Hi {{first_name}},\n\nThanks for joining us! Here's how to get started...",
       audience: "New Leads (30d)",
       templateId: "et1",

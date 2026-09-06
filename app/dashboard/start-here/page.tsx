@@ -27,7 +27,7 @@ export default function StartHerePage() {
       <div className="flex flex-col items-center text-center">
         <Logo className="scale-125" />
         <h1 className="mt-4 text-2xl font-bold text-slate-900 sm:text-3xl">
-          All In One Marketing Software Dashboard
+          enone Software Dashboard
         </h1>
       </div>
 

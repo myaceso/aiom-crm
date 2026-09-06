@@ -18,7 +18,7 @@ export default function SettingsPage() {
   function onSave(e: FormEvent) {
     e.preventDefault();
     updateSettings({
-      companyName: companyName.trim() || "All In One Marketing",
+      companyName: companyName.trim() || "enone",
       primaryColor: primaryColor || "#6366f1",
       language: lang,
     });
