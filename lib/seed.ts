@@ -308,6 +308,7 @@ export function createSeedSocialPosts(): SocialPost[] {
       scheduledAt: null,
       publishedAt: daysAgo(2, 9),
       createdAt: daysAgo(3),
+      mediaIds: [],
     },
     {
       id: "sp2",
@@ -317,6 +318,7 @@ export function createSeedSocialPosts(): SocialPost[] {
       scheduledAt: new Date(now + 2 * 86400000).toISOString(),
       publishedAt: null,
       createdAt: daysAgo(1),
+      mediaIds: [],
     },
     {
       id: "sp3",
@@ -326,6 +328,7 @@ export function createSeedSocialPosts(): SocialPost[] {
       scheduledAt: new Date(now + 5 * 86400000).toISOString(),
       publishedAt: null,
       createdAt: daysAgo(0, 2),
+      mediaIds: [],
     },
     {
       id: "sp4",
@@ -335,6 +338,7 @@ export function createSeedSocialPosts(): SocialPost[] {
       scheduledAt: null,
       publishedAt: daysAgo(5, 14),
       createdAt: daysAgo(6),
+      mediaIds: [],
     },
     {
       id: "sp5",
@@ -344,6 +348,7 @@ export function createSeedSocialPosts(): SocialPost[] {
       scheduledAt: null,
       publishedAt: null,
       createdAt: daysAgo(0, 1),
+      mediaIds: [],
     },
   ];
 }

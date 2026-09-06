@@ -103,6 +103,28 @@ export type SocialConnection = {
 
 export type SocialPostStatus = "draft" | "scheduled" | "published";
 
+export type MediaKind = "image" | "video";
+
+export type MediaAsset = {
+  id: string;
+  kind: MediaKind;
+  name: string;
+  size: number;
+  mime: string;
+  createdAt: string;
+  /** Session-only object URL; never persisted to localStorage */
+  previewUrl?: string;
+  durationSec?: number;
+};
+
+export type SocialMediaMeta = {
+  id: string;
+  kind: MediaKind;
+  name: string;
+  size: number;
+  mime: string;
+};
+
 export type SocialPost = {
   id: string;
   body: string;
@@ -111,6 +133,7 @@ export type SocialPost = {
   scheduledAt: string | null;
   publishedAt: string | null;
   createdAt: string;
+  mediaIds: string[];
 };
 
 export type SmsCampaignStatus = "draft" | "scheduled" | "sent";

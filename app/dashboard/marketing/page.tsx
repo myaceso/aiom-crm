@@ -18,6 +18,11 @@ import { t } from "@/lib/i18n";
 import type { SocialNetworkId, SocialPostStatus } from "@/lib/types";
 import { useStore } from "@/store/useStore";
 import clsx from "clsx";
+import {
+  MediaPicker,
+  MediaThumb,
+  useMediaPreviewHydration,
+} from "@/components/marketing/MediaPicker";
 
 const NETWORK_ICONS: Record<SocialNetworkId, typeof Facebook> = {
   facebook: Facebook,
@@ -47,19 +52,28 @@ export default function MarketingPage() {
   const language = useStore((s) => s.settings.language);
   const connections = useStore((s) => s.socialConnections);
   const posts = useStore((s) => s.socialPosts);
+  const mediaAssets = useStore((s) => s.mediaAssets);
   const addSocialPost = useStore((s) => s.addSocialPost);
   const showToast = useStore((s) => s.showToast);
 
   const [body, setBody] = useState("");
   const [channels, setChannels] = useState<SocialNetworkId[]>([]);
   const [scheduledAt, setScheduledAt] = useState("");
+  const [mediaIds, setMediaIds] = useState<string[]>([]);
   const [publishing, setPublishing] = useState(false);
+
+  useMediaPreviewHydration();
 
   const connectedIds = useMemo(
     () => new Set(connections.filter((c) => c.connected).map((c) => c.id)),
     [connections]
   );
   const hasConnected = connectedIds.size > 0;
+
+  const mediaById = useMemo(() => {
+    const map = new Map(mediaAssets.map((m) => [m.id, m]));
+    return map;
+  }, [mediaAssets]);
 
   function toggleChannel(id: SocialNetworkId) {
     if (!connectedIds.has(id)) return;
@@ -68,13 +82,20 @@ export default function MarketingPage() {
     );
   }
 
+  function resetComposer() {
+    setBody("");
+    setChannels([]);
+    setScheduledAt("");
+    setMediaIds([]);
+  }
+
   async function submit(status: SocialPostStatus) {
     if (!hasConnected) {
       showToast(t(language, "connectRequired"));
       return;
     }
-    if (!body.trim()) {
-      showToast(language === "es" ? "Escribe un mensaje" : "Write a post first");
+    if (!body.trim() && mediaIds.length === 0) {
+      showToast(language === "es" ? "Escribe un mensaje o adjunta medios" : "Write a post or attach media");
       return;
     }
     if (channels.length === 0) {
@@ -90,6 +111,17 @@ export default function MarketingPage() {
       return;
     }
 
+    const mediaMeta = mediaIds
+      .map((id) => mediaById.get(id))
+      .filter(Boolean)
+      .map((m) => ({
+        id: m!.id,
+        kind: m!.kind,
+        name: m!.name,
+        size: m!.size,
+        mime: m!.mime,
+      }));
+
     if (status === "published") {
       setPublishing(true);
       try {
@@ -99,6 +131,8 @@ export default function MarketingPage() {
           body: JSON.stringify({
             body: body.trim(),
             channels,
+            media: mediaMeta,
+            mediaCount: mediaMeta.length,
             connections: connections.map((c) => ({
               id: c.id,
               connected: c.connected,
@@ -120,10 +154,9 @@ export default function MarketingPage() {
           channels,
           status: "published",
           scheduledAt: null,
+          mediaIds: [...mediaIds],
         });
-        setBody("");
-        setChannels([]);
-        setScheduledAt("");
+        resetComposer();
         showToast(t(language, "publishSuccess"));
       } catch {
         showToast(t(language, "publishFailed"));
@@ -139,10 +172,9 @@ export default function MarketingPage() {
       status,
       scheduledAt:
         status === "scheduled" ? new Date(scheduledAt).toISOString() : null,
+      mediaIds: [...mediaIds],
     });
-    setBody("");
-    setChannels([]);
-    setScheduledAt("");
+    resetComposer();
     showToast(
       status === "scheduled"
         ? language === "es"
@@ -298,6 +330,14 @@ export default function MarketingPage() {
               }
             />
           </div>
+
+          <MediaPicker
+            language={language}
+            selectedIds={mediaIds}
+            onChange={setMediaIds}
+            disabled={!hasConnected || publishing}
+          />
+
           <div>
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
               {t(language, "scheduleAt")}
@@ -313,7 +353,7 @@ export default function MarketingPage() {
             <button
               type="button"
               onClick={() => void submit("draft")}
-              disabled={!hasConnected}
+              disabled={!hasConnected || publishing}
               className="rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
             >
               {t(language, "saveDraft")}
@@ -321,7 +361,7 @@ export default function MarketingPage() {
             <button
               type="button"
               onClick={() => void submit("scheduled")}
-              disabled={!hasConnected}
+              disabled={!hasConnected || publishing}
               className="rounded-md border border-[var(--brand)]/30 bg-[var(--brand)]/10 px-3 py-2 text-sm font-semibold text-[var(--brand)] disabled:opacity-40"
             >
               {t(language, "schedulePost")}
@@ -341,45 +381,64 @@ export default function MarketingPage() {
             {t(language, "scheduledPosts")}
           </h2>
           <ul className="divide-y divide-slate-100">
-            {posts.map((p) => (
-              <li key={p.id} className="py-3">
-                <div className="mb-1 flex flex-wrap items-center gap-2">
-                  <span
-                    className={clsx(
-                      "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase",
-                      p.status === "published" &&
-                        "bg-emerald-50 text-emerald-700",
-                      p.status === "scheduled" && "bg-amber-50 text-amber-700",
-                      p.status === "draft" && "bg-slate-100 text-slate-600"
-                    )}
-                  >
-                    {t(language, STATUS_KEY[p.status])}
-                  </span>
-                  <span className="text-[11px] text-slate-400">
-                    {p.publishedAt
-                      ? format(new Date(p.publishedAt), "MMM d, HH:mm")
-                      : p.scheduledAt
-                        ? format(new Date(p.scheduledAt), "MMM d, HH:mm")
-                        : format(new Date(p.createdAt), "MMM d, HH:mm")}
-                  </span>
-                </div>
-                <p className="text-sm text-slate-700">{p.body}</p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {p.channels.map((ch) => {
-                    const Icon = NETWORK_ICONS[ch];
-                    return (
-                      <span
-                        key={ch}
-                        className="inline-flex items-center gap-1 rounded-md bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600"
-                      >
-                        <Icon className="h-3 w-3" />
-                        {connections.find((c) => c.id === ch)?.name || ch}
-                      </span>
-                    );
-                  })}
-                </div>
-              </li>
-            ))}
+            {posts.map((p) => {
+              const postMedia = (p.mediaIds || [])
+                .map((id) => mediaById.get(id))
+                .filter(Boolean);
+              return (
+                <li key={p.id} className="py-3">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <span
+                      className={clsx(
+                        "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase",
+                        p.status === "published" &&
+                          "bg-emerald-50 text-emerald-700",
+                        p.status === "scheduled" && "bg-amber-50 text-amber-700",
+                        p.status === "draft" && "bg-slate-100 text-slate-600"
+                      )}
+                    >
+                      {t(language, STATUS_KEY[p.status])}
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      {p.publishedAt
+                        ? format(new Date(p.publishedAt), "MMM d, HH:mm")
+                        : p.scheduledAt
+                          ? format(new Date(p.scheduledAt), "MMM d, HH:mm")
+                          : format(new Date(p.createdAt), "MMM d, HH:mm")}
+                    </span>
+                  </div>
+                  {p.body && (
+                    <p className="text-sm text-slate-700">{p.body}</p>
+                  )}
+                  {postMedia.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {postMedia.map((m) => (
+                        <MediaThumb
+                          key={m!.id}
+                          asset={m!}
+                          language={language}
+                          compact
+                        />
+                      ))}
+                    </div>
+                  )}
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {p.channels.map((ch) => {
+                      const Icon = NETWORK_ICONS[ch];
+                      return (
+                        <span
+                          key={ch}
+                          className="inline-flex items-center gap-1 rounded-md bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600"
+                        >
+                          <Icon className="h-3 w-3" />
+                          {connections.find((c) => c.id === ch)?.name || ch}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </li>
+              );
+            })}
             {posts.length === 0 && (
               <li className="py-6 text-center text-sm text-slate-400">
                 {t(language, "noResults")}

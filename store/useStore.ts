@@ -15,6 +15,7 @@ import type {
   SocialConnection,
   SocialPost,
   SocialNetworkId,
+  MediaAsset,
   SmsCampaign,
   EmailCampaign,
   EmailTemplate,
@@ -72,11 +73,16 @@ type Store = {
     data: Partial<Pick<SocialConnection, "handle" | "profileUrl" | "accessToken">>
   ) => void;
   socialPosts: SocialPost[];
+  mediaAssets: MediaAsset[];
+  addMediaAsset: (asset: MediaAsset) => void;
+  removeMediaAsset: (id: string) => void;
+  setMediaPreviewUrl: (id: string, previewUrl: string | undefined) => void;
   addSocialPost: (p: {
     body: string;
     channels: SocialNetworkId[];
     status: SocialPost["status"];
     scheduledAt: string | null;
+    mediaIds?: string[];
   }) => void;
   smsCampaigns: SmsCampaign[];
   addSmsCampaign: (c: {
@@ -261,6 +267,33 @@ export const useStore = create<Store>()(
           ),
         })),
       socialPosts: [],
+      mediaAssets: [],
+      addMediaAsset: (asset) =>
+        set((s) => ({
+          mediaAssets: [
+            {
+              id: asset.id,
+              kind: asset.kind,
+              name: asset.name,
+              size: asset.size,
+              mime: asset.mime,
+              createdAt: asset.createdAt,
+              previewUrl: asset.previewUrl,
+              durationSec: asset.durationSec,
+            },
+            ...s.mediaAssets.filter((m) => m.id !== asset.id),
+          ],
+        })),
+      removeMediaAsset: (id) =>
+        set((s) => ({
+          mediaAssets: s.mediaAssets.filter((m) => m.id !== id),
+        })),
+      setMediaPreviewUrl: (id, previewUrl) =>
+        set((s) => ({
+          mediaAssets: s.mediaAssets.map((m) =>
+            m.id === id ? { ...m, previewUrl } : m
+          ),
+        })),
       addSocialPost: (p) =>
         set((s) => ({
           socialPosts: [
@@ -273,6 +306,7 @@ export const useStore = create<Store>()(
               publishedAt:
                 p.status === "published" ? new Date().toISOString() : null,
               createdAt: new Date().toISOString(),
+              mediaIds: p.mediaIds ?? [],
             },
             ...s.socialPosts,
           ],
@@ -396,6 +430,14 @@ export const useStore = create<Store>()(
         }
         if (s.socialPosts.length === 0) {
           patch.socialPosts = createSeedSocialPosts();
+        } else if (s.socialPosts.some((p) => !Array.isArray(p.mediaIds))) {
+          patch.socialPosts = s.socialPosts.map((p) => ({
+            ...p,
+            mediaIds: Array.isArray(p.mediaIds) ? p.mediaIds : [],
+          }));
+        }
+        if (!Array.isArray(s.mediaAssets)) {
+          patch.mediaAssets = [];
         }
         if (s.smsCampaigns.length === 0) {
           patch.smsCampaigns = createSeedSmsCampaigns();
@@ -430,6 +472,7 @@ export const useStore = create<Store>()(
         activity: s.activity,
         socialConnections: s.socialConnections,
         socialPosts: s.socialPosts,
+        mediaAssets: (s.mediaAssets || []).map((m) => ({ id: m.id, kind: m.kind, name: m.name, size: m.size, mime: m.mime, createdAt: m.createdAt, durationSec: m.durationSec })),
         smsCampaigns: s.smsCampaigns,
         emailCampaigns: s.emailCampaigns,
         emailTemplates: s.emailTemplates,
