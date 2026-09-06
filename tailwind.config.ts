@@ -10,11 +10,12 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          DEFAULT: "#38a0db",
-          dark: "#1e3a5f",
-          soft: "#f2f7fa",
-          muted: "#607179",
-          border: "#d1d5db",
+          DEFAULT: "#6366f1",
+          hover: "#4f46e5",
+          dark: "#0f172a",
+          soft: "#f8fafc",
+          muted: "#64748b",
+          border: "#e2e8f0",
         },
       },
       boxShadow: {

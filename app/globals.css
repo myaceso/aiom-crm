@@ -3,7 +3,9 @@
 @tailwind utilities;
 
 :root {
-  --brand: #38a0db;
+  --brand: #6366f1;
+  --brand-hover: #4f46e5;
+  --navy: #0f172a;
 }
 
 html,
@@ -12,8 +14,8 @@ body {
 }
 
 body {
-  color: #607179;
-  background: #f2f7fa;
+  color: #64748b;
+  background: #f8fafc;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
     Helvetica, Arial, sans-serif;
 }
@@ -26,6 +28,9 @@ body {
 @layer utilities {
   .brand-bg {
     background-color: var(--brand);
+  }
+  .brand-bg:hover {
+    background-color: var(--brand-hover, #4f46e5);
   }
   .brand-text {
     color: var(--brand);
@@ -47,8 +52,8 @@ body {
 .boot-spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid #cfe8f6;
-  border-top-color: #38a0db;
+  border: 3px solid #e0e7ff;
+  border-top-color: #6366f1;
   border-radius: 50%;
   animation: spin-slow 0.8s linear infinite;
 }

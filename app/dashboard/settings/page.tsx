@@ -19,7 +19,7 @@ export default function SettingsPage() {
     e.preventDefault();
     updateSettings({
       companyName: companyName.trim() || "All In One Marketing",
-      primaryColor: primaryColor || "#38a0db",
+      primaryColor: primaryColor || "#6366f1",
       language: lang,
     });
     showToast(t(lang, "saved"));
@@ -65,7 +65,7 @@ export default function SettingsPage() {
             />
           </div>
           <div className="mt-3 flex gap-2">
-            {["#38a0db", "#007bff", "#10b981", "#8b5cf6", "#f59e0b"].map((c) => (
+            {["#6366f1", "#4f46e5", "#0f172a", "#10b981", "#f59e0b"].map((c) => (
               <button
                 key={c}
                 type="button"
