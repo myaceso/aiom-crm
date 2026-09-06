@@ -181,8 +181,8 @@ export default function CalendarsPage() {
       </div>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <form onSubmit={onCreate} className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+          <form onSubmit={onCreate} className="modal-sheet max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-xl">
             <h2 className="mb-4 text-lg font-semibold text-slate-800">
               {t(language, "newAppointment")}
             </h2>
@@ -204,7 +204,7 @@ export default function CalendarsPage() {
                   className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
                 />
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-500">Date</label>
                   <input

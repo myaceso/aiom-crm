@@ -246,11 +246,11 @@ export default function EmailMarketingPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
           {t(language, "campaigns")}
         </div>
-        <table className="min-w-full text-left text-sm">
+        <table className="min-w-[640px] w-full text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase text-slate-500">
             <tr>
               <th className="px-4 py-3 font-semibold">{t(language, "name")}</th>
@@ -299,10 +299,10 @@ export default function EmailMarketingPage() {
       </div>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4">
           <form
             onSubmit={onCreate}
-            className="max-h-[90vh] w-full max-w-lg space-y-4 overflow-y-auto rounded-xl bg-white p-5 shadow-xl"
+            className="modal-sheet max-h-[92dvh] w-full max-w-lg space-y-4 overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-xl"
           >
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-slate-800">

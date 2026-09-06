@@ -257,7 +257,7 @@ export function MediaPicker({
         onDrop={onDrop}
         onClick={() => !disabled && !uploading && inputRef.current?.click()}
         className={clsx(
-          "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-6 text-center transition",
+          "flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-3 py-6 text-center transition sm:px-4",
           dragging
             ? "border-[var(--brand)] bg-[var(--brand)]/5"
             : "border-slate-200 bg-slate-50/80 hover:border-slate-300",

@@ -113,6 +113,8 @@ type Store = {
   clearToast: () => void;
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
+  mobileNavOpen: boolean;
+  setMobileNavOpen: (v: boolean) => void;
   ensureSeed: () => void;
 };
 
@@ -403,6 +405,8 @@ export const useStore = create<Store>()(
       clearToast: () => set({ toast: null }),
       sidebarCollapsed: false,
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+      mobileNavOpen: false,
+      setMobileNavOpen: (v) => set({ mobileNavOpen: v }),
       ensureSeed: () => {
         const s = get();
         const patch: Partial<Store> = {};

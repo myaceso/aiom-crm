@@ -74,27 +74,27 @@ export default function OpportunitiesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-800">{t(language, "opportunities")}</h1>
           <p className="text-sm text-slate-500">Drag deals between stages</p>
         </div>
         <button
           onClick={() => setOpen(true)}
-          className="brand-bg inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white"
+          className="brand-bg inline-flex min-h-[40px] items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white"
         >
           <Plus className="h-4 w-4" />
           {t(language, "newDeal")}
         </button>
       </div>
 
-      <div className="flex gap-3 overflow-x-auto pb-2">
+      <div className="-mx-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-3 pb-3 sm:mx-0 sm:px-0">
         {STAGES.map((stage) => (
           <div
             key={stage}
             onDragOver={(e) => e.preventDefault()}
             onDrop={() => onDrop(stage)}
-            className="w-[260px] shrink-0 rounded-xl border border-slate-200 bg-slate-50"
+            className="w-[min(280px,85vw)] shrink-0 snap-start rounded-xl border border-slate-200 bg-slate-50 sm:w-[260px]"
           >
             <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2.5">
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
@@ -128,8 +128,8 @@ export default function OpportunitiesPage() {
       </div>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <form onSubmit={onCreate} className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+          <form onSubmit={onCreate} className="modal-sheet max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-xl">
             <h2 className="mb-4 text-lg font-semibold text-slate-800">{t(language, "newDeal")}</h2>
             <div className="space-y-3">
               <div>
@@ -187,11 +187,11 @@ export default function OpportunitiesPage() {
                 </select>
               </div>
             </div>
-            <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => setOpen(false)} className="rounded-md border px-3 py-2 text-sm">
+            <div className="mt-5 flex flex-col-reverse justify-end gap-2 sm:flex-row">
+              <button type="button" onClick={() => setOpen(false)} className="min-h-[40px] rounded-md border px-3 py-2 text-sm">
                 {t(language, "cancel")}
               </button>
-              <button type="submit" className="brand-bg rounded-md px-3 py-2 text-sm font-semibold text-white">
+              <button type="submit" className="brand-bg min-h-[40px] rounded-md px-3 py-2 text-sm font-semibold text-white">
                 {t(language, "create")}
               </button>
             </div>

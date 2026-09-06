@@ -42,8 +42,8 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen flex-col bg-[#f8fafc]">
       <AuthHeader />
-      <main className="flex flex-1 items-center justify-center px-4 py-10">
-        <div className="w-full max-w-[440px] rounded-lg bg-white p-8 shadow-card sm:p-10">
+      <main className="flex flex-1 items-center justify-center px-4 py-8 sm:py-10">
+        <div className="w-full max-w-[440px] rounded-lg bg-white p-5 shadow-card sm:p-8 md:p-10">
           <h1 className="mb-8 text-center text-[22px] font-semibold text-[#4b5563]">
             {t(language, "signInTitle")}
           </h1>

@@ -163,6 +163,9 @@ const dict = {
     mediaImage: "Image",
     mediaShowLibrary: "Browse library",
     mediaHideLibrary: "Hide library",
+    openMenu: "Open menu",
+    closeMenu: "Close menu",
+    back: "Back",
   },
   es: {
     platformLanguage: "Idioma de la plataforma:",
@@ -326,6 +329,9 @@ const dict = {
     mediaImage: "Imagen",
     mediaShowLibrary: "Ver biblioteca",
     mediaHideLibrary: "Ocultar biblioteca",
+    openMenu: "Abrir menú",
+    closeMenu: "Cerrar menú",
+    back: "Volver",
   },
 } as const;
 

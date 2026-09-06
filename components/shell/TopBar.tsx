@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, ChevronDown, Megaphone, Phone } from "lucide-react";
+import { Bell, ChevronDown, Megaphone, Menu, Phone } from "lucide-react";
 import { t } from "@/lib/i18n";
 import { useStore } from "@/store/useStore";
 
@@ -11,6 +11,7 @@ export default function TopBar() {
   const language = useStore((s) => s.settings.language);
   const session = useStore((s) => s.session);
   const logout = useStore((s) => s.logout);
+  const setMobileNavOpen = useStore((s) => s.setMobileNavOpen);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -32,20 +33,31 @@ export default function TopBar() {
   return (
     <header
       ref={menuRef}
-      className="flex h-12 shrink-0 items-center justify-end gap-2 border-b border-slate-200 bg-white px-4"
+      className="flex min-h-12 shrink-0 flex-wrap items-center justify-end gap-1.5 border-b border-slate-200 bg-white px-3 py-1.5 sm:gap-2 sm:px-4"
     >
-      <button className="mr-auto hidden items-center gap-1.5 text-sm text-[var(--brand)] hover:underline sm:flex">
+      <button
+        type="button"
+        onClick={() => setMobileNavOpen(true)}
+        className="mr-auto flex h-10 w-10 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 md:hidden"
+        aria-label={t(language, "openMenu")}
+        aria-controls="app-sidebar"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
+      <button className="mr-auto hidden min-h-[40px] items-center gap-1.5 px-1 text-sm text-[var(--brand)] hover:underline md:flex">
         <Megaphone className="h-4 w-4" />
         What&apos;s new
       </button>
+
       <button
-        className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500 text-white shadow-sm hover:bg-emerald-600"
+        className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 text-white shadow-sm hover:bg-emerald-600"
         title="Phone"
       >
         <Phone className="h-4 w-4" />
       </button>
       <button
-        className="relative flex h-9 w-9 items-center justify-center rounded-full bg-[#f97316] text-white shadow-sm hover:bg-orange-600"
+        className="relative flex h-10 w-10 items-center justify-center rounded-full bg-[#f97316] text-white shadow-sm hover:bg-orange-600"
         title={t(language, "notifications")}
       >
         <Bell className="h-4 w-4 fill-white" />
@@ -56,7 +68,7 @@ export default function TopBar() {
       <div className="relative">
         <button
           onClick={() => setMenuOpen((v) => !v)}
-          className="flex items-center gap-1.5 rounded-md px-1 py-1 hover:bg-slate-50"
+          className="flex min-h-[40px] items-center gap-1.5 rounded-md px-1.5 py-1 hover:bg-slate-50"
         >
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1e3a5f] text-sm font-semibold text-white">
             {initial}
@@ -73,13 +85,13 @@ export default function TopBar() {
                 setMenuOpen(false);
                 router.push("/dashboard/settings");
               }}
-              className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+              className="block min-h-[40px] w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
             >
               {t(language, "settings")}
             </button>
             <button
               onClick={handleLogout}
-              className="block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+              className="block min-h-[40px] w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
             >
               {t(language, "logout")}
             </button>

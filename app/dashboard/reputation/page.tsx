@@ -24,8 +24,8 @@ export default function ReputationPage() {
         </h1>
         <p className="text-sm text-slate-500">Demo sample data — read only</p>
       </div>
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full text-left text-sm">
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+        <table className="min-w-[640px] w-full text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase text-slate-500">
             <tr>
               {COLS.map((c) => (

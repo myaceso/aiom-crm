@@ -107,25 +107,69 @@ export default function ContactsPage() {
         </div>
         <button
           onClick={openCreate}
-          className="brand-bg inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white"
+          className="brand-bg inline-flex min-h-[40px] items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white"
         >
           <Plus className="h-4 w-4" />
           {t(language, "addContact")}
         </button>
       </div>
 
-      <div className="relative max-w-md">
+      <div className="relative w-full max-w-md">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder={t(language, "searchContacts")}
-          className="w-full rounded-md border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-[var(--brand)]/30"
+          className="w-full rounded-md border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-[var(--brand)]/30"
         />
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full text-left text-sm">
+      {/* Mobile cards */}
+      <div className="space-y-2 md:hidden">
+        {filtered.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            onClick={() => setSelected(c)}
+            className="flex w-full flex-col gap-1 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <span className="font-semibold text-slate-800">
+                {c.firstName} {c.lastName}
+              </span>
+              <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] capitalize text-slate-600">
+                {c.status}
+              </span>
+            </div>
+            <span className="truncate text-sm text-slate-600">{c.email}</span>
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500">
+              <span>{c.phone}</span>
+              <span>{c.company}</span>
+            </div>
+            {c.tags.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {c.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded-full bg-sky-50 px-2 py-0.5 text-xs text-sky-700"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+          </button>
+        ))}
+        {filtered.length === 0 && (
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-8 text-center text-slate-400">
+            {t(language, "noResults")}
+          </div>
+        )}
+      </div>
+
+      {/* Desktop / tablet table */}
+      <div className="hidden overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm md:block">
+        <table className="min-w-[720px] w-full text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase text-slate-500">
             <tr>
               <th className="px-4 py-3 font-semibold">{t(language, "name")}</th>
@@ -176,29 +220,39 @@ export default function ContactsPage() {
       </div>
 
       {selected && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/30">
-          <div className="flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-800">
+        <div className="fixed inset-0 z-50 flex items-end justify-end bg-black/30 sm:items-stretch">
+          <button
+            type="button"
+            className="absolute inset-0 sm:hidden"
+            aria-label={t(language, "closeMenu")}
+            onClick={() => setSelected(null)}
+          />
+          <div className="relative flex h-[92dvh] w-full max-w-md flex-col rounded-t-2xl bg-white shadow-2xl sm:h-full sm:rounded-none">
+            <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
+              <div className="min-w-0">
+                <h2 className="truncate text-lg font-semibold text-slate-800">
                   {selected.firstName} {selected.lastName}
                 </h2>
-                <p className="text-xs text-slate-500">{selected.email}</p>
+                <p className="truncate text-xs text-slate-500">{selected.email}</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2">
                 <button
                   onClick={() => openEdit(selected)}
-                  className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium"
+                  className="min-h-[40px] rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium"
                 >
                   {t(language, "editContact")}
                 </button>
-                <button onClick={() => setSelected(null)} className="rounded p-1 hover:bg-slate-100">
+                <button
+                  onClick={() => setSelected(null)}
+                  className="flex h-10 w-10 items-center justify-center rounded-md hover:bg-slate-100"
+                  aria-label={t(language, "closeMenu")}
+                >
                   <X className="h-5 w-5" />
                 </button>
               </div>
             </div>
             <div className="flex-1 space-y-5 overflow-y-auto p-4">
-              <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                 <div>
                   <p className="text-xs text-slate-400">{t(language, "phone")}</p>
                   <p className="font-medium text-slate-700">{selected.phone}</p>
@@ -228,16 +282,16 @@ export default function ContactsPage() {
               </div>
               <div>
                 <h3 className="mb-2 text-sm font-semibold text-slate-700">{t(language, "notes")}</h3>
-                <div className="mb-2 flex gap-2">
+                <div className="mb-2 flex flex-col gap-2 sm:flex-row">
                   <input
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
                     placeholder={t(language, "addNote")}
-                    className="flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none"
+                    className="min-w-0 flex-1 rounded-md border border-slate-200 px-3 py-2.5 text-sm outline-none"
                   />
                   <button
                     onClick={submitNote}
-                    className="brand-bg rounded-md px-3 py-2 text-sm font-semibold text-white"
+                    className="brand-bg min-h-[40px] rounded-md px-3 py-2 text-sm font-semibold text-white"
                   >
                     {t(language, "save")}
                   </button>
@@ -272,15 +326,15 @@ export default function ContactsPage() {
       )}
 
       {modal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
           <form
             onSubmit={onSave}
-            className="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl"
+            className="modal-sheet max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-xl"
           >
             <h2 className="mb-4 text-lg font-semibold text-slate-800">
               {modal === "create" ? t(language, "addContact") : t(language, "editContact")}
             </h2>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {(
                 [
                   ["firstName", "First name"],
@@ -291,13 +345,13 @@ export default function ContactsPage() {
                   ["tags", "Tags (comma)"],
                 ] as const
               ).map(([key, label]) => (
-                <div key={key} className={key === "tags" || key === "company" ? "col-span-2" : ""}>
+                <div key={key} className={key === "tags" || key === "company" ? "sm:col-span-2" : ""}>
                   <label className="mb-1 block text-xs font-semibold text-slate-500">{label}</label>
                   <input
                     required={key !== "tags"}
                     value={form[key]}
                     onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none"
+                    className="w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm outline-none"
                   />
                 </div>
               ))}
@@ -306,7 +360,7 @@ export default function ContactsPage() {
                 <select
                   value={form.source}
                   onChange={(e) => setForm({ ...form, source: e.target.value })}
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                  className="w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm"
                 >
                   {["Facebook Ads", "Google Ads", "Organic", "Referral", "Walk-in", "Chat Widget"].map(
                     (s) => (
@@ -322,7 +376,7 @@ export default function ContactsPage() {
                   onChange={(e) =>
                     setForm({ ...form, status: e.target.value as Contact["status"] })
                   }
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                  className="w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm"
                 >
                   <option value="lead">Lead</option>
                   <option value="active">Active</option>
@@ -330,15 +384,15 @@ export default function ContactsPage() {
                 </select>
               </div>
             </div>
-            <div className="mt-5 flex justify-end gap-2">
+            <div className="mt-5 flex flex-col-reverse justify-end gap-2 sm:flex-row">
               <button
                 type="button"
                 onClick={() => setModal(null)}
-                className="rounded-md border border-slate-200 px-3 py-2 text-sm"
+                className="min-h-[40px] rounded-md border border-slate-200 px-3 py-2 text-sm"
               >
                 {t(language, "cancel")}
               </button>
-              <button type="submit" className="brand-bg rounded-md px-3 py-2 text-sm font-semibold text-white">
+              <button type="submit" className="brand-bg min-h-[40px] rounded-md px-3 py-2 text-sm font-semibold text-white">
                 {t(language, "save")}
               </button>
             </div>
