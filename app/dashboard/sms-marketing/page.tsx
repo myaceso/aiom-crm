@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { Plus, X } from "lucide-react";
+import Link from "next/link";
+import { Plus, X, Plug, CheckCircle2 } from "lucide-react";
 import { format } from "date-fns";
 import { t } from "@/lib/i18n";
 import type { SmsCampaignStatus } from "@/lib/types";
@@ -27,6 +28,7 @@ export default function SmsMarketingPage() {
   const language = useStore((s) => s.settings.language);
   const campaigns = useStore((s) => s.smsCampaigns);
   const addSmsCampaign = useStore((s) => s.addSmsCampaign);
+  const sms = useStore((s) => s.integrations.sms);
   const showToast = useStore((s) => s.showToast);
 
   const [open, setOpen] = useState(false);
@@ -35,9 +37,11 @@ export default function SmsMarketingPage() {
   const [audience, setAudience] = useState<string>(AUDIENCES[0]);
   const [status, setStatus] = useState<SmsCampaignStatus>("draft");
   const [scheduledAt, setScheduledAt] = useState("");
+  const [sending, setSending] = useState(false);
 
   const charCount = body.length;
   const segments = Math.max(1, Math.ceil(Math.max(charCount, 1) / 160));
+  const smsConnected = sms.connected;
 
   const totals = useMemo(() => {
     const sent = campaigns.reduce((s, c) => s + c.sent, 0);
@@ -55,25 +59,71 @@ export default function SmsMarketingPage() {
     setOpen(false);
   }
 
-  function onCreate(e: FormEvent) {
+  async function onCreate(e: FormEvent) {
     e.preventDefault();
     if (!name.trim() || !body.trim()) {
-      showToast(language === "es" ? "Completa nombre y mensaje" : "Name and message required");
+      showToast(
+        language === "es" ? "Completa nombre y mensaje" : "Name and message required"
+      );
       return;
     }
     if (status === "scheduled" && !scheduledAt) {
       showToast(language === "es" ? "Elige fecha y hora" : "Pick a schedule date");
       return;
     }
+    if (status === "sent") {
+      if (!smsConnected) {
+        showToast(t(language, "connectSmsRequired"));
+        return;
+      }
+      setSending(true);
+      try {
+        const res = await fetch("/api/sms/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            campaign: {
+              name: name.trim(),
+              body: body.trim(),
+              audience,
+            },
+            settings: sms,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          showToast((data as { error?: string }).error || t(language, "sendFailed"));
+          return;
+        }
+        addSmsCampaign({
+          name: name.trim(),
+          body: body.trim(),
+          audience,
+          status: "sent",
+          scheduledAt: null,
+        });
+        showToast(
+          (data as { message?: string }).message || t(language, "sendSuccess")
+        );
+        reset();
+      } catch {
+        showToast(t(language, "sendFailed"));
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+
     addSmsCampaign({
       name: name.trim(),
       body: body.trim(),
       audience,
       status,
-      scheduledAt: status === "scheduled" ? new Date(scheduledAt).toISOString() : null,
+      scheduledAt:
+        status === "scheduled" ? new Date(scheduledAt).toISOString() : null,
     });
     showToast(
-      language === "es" ? "Campaña SMS creada (demo)" : "SMS campaign created (demo)"
+      language === "es" ? "Campaña SMS creada" : "SMS campaign created"
     );
     reset();
   }
@@ -85,18 +135,34 @@ export default function SmsMarketingPage() {
           <h1 className="text-xl font-semibold text-slate-800">
             {t(language, "smsMarketing")}
           </h1>
-          <p className="text-sm text-slate-500">
-            {t(language, "mockStats")} — {language === "es" ? "sin APIs reales" : "no real APIs"}
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+            {smsConnected ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold uppercase text-emerald-700">
+                <CheckCircle2 className="h-3 w-3" />
+                {t(language, "connectedBadge")} · {sms.fromNumber}
+              </span>
+            ) : (
+              <span className="text-amber-700">{t(language, "connectSmsRequired")}</span>
+            )}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="brand-bg inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white"
-        >
-          <Plus className="h-4 w-4" />
-          {t(language, "createCampaign")}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/dashboard/integrations"
+            className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            <Plug className="h-4 w-4" />
+            {t(language, "manageIntegrations")}
+          </Link>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="brand-bg inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white"
+          >
+            <Plus className="h-4 w-4" />
+            {t(language, "createCampaign")}
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
@@ -200,6 +266,14 @@ export default function SmsMarketingPage() {
                 <X className="h-5 w-5" />
               </button>
             </div>
+            {!smsConnected && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                {t(language, "connectSmsRequired")}{" "}
+                <Link href="/dashboard/integrations" className="font-semibold underline">
+                  {t(language, "goToIntegrations")}
+                </Link>
+              </div>
+            )}
             <div>
               <label className="mb-1 block text-sm font-semibold text-slate-600">
                 {t(language, "name")}
@@ -267,7 +341,10 @@ export default function SmsMarketingPage() {
                 >
                   <option value="draft">{t(language, "draft")}</option>
                   <option value="scheduled">{t(language, "scheduled")}</option>
-                  <option value="sent">{t(language, "sent")}</option>
+                  <option value="sent" disabled={!smsConnected}>
+                    {t(language, "sent")}
+                    {!smsConnected ? ` (${t(language, "notConnected")})` : ""}
+                  </option>
                 </select>
               </div>
               <div>
@@ -293,9 +370,10 @@ export default function SmsMarketingPage() {
               </button>
               <button
                 type="submit"
-                className="brand-bg rounded-md px-3 py-2 text-sm font-semibold text-white"
+                disabled={sending || (status === "sent" && !smsConnected)}
+                className="brand-bg rounded-md px-3 py-2 text-sm font-semibold text-white disabled:opacity-40"
               >
-                {t(language, "create")}
+                {status === "sent" ? t(language, "send") : t(language, "create")}
               </button>
             </div>
           </form>

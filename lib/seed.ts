@@ -10,6 +10,7 @@ import type {
   SmsCampaign,
   EmailCampaign,
   EmailTemplate,
+  Integrations,
 } from "./types";
 
 const now = Date.now();
@@ -272,14 +273,30 @@ export const revenueTrendData = [
 
 export function createSeedSocialConnections(): SocialConnection[] {
   return [
-    { id: "facebook", name: "Facebook", connected: true, handle: "@enone" },
-    { id: "instagram", name: "Instagram", connected: true, handle: "@enone.app" },
-    { id: "linkedin", name: "LinkedIn", connected: false },
-    { id: "x", name: "X", connected: true, handle: "@enone" },
-    { id: "tiktok", name: "TikTok", connected: false },
-    { id: "google_business", name: "Google Business", connected: true, handle: "enone" },
+    { id: "facebook", name: "Facebook", connected: false, handle: "", profileUrl: "", accessToken: "" },
+    { id: "instagram", name: "Instagram", connected: false, handle: "", profileUrl: "", accessToken: "" },
+    { id: "linkedin", name: "LinkedIn", connected: false, handle: "", profileUrl: "", accessToken: "" },
+    { id: "x", name: "X", connected: false, handle: "", profileUrl: "", accessToken: "" },
+    { id: "tiktok", name: "TikTok", connected: false, handle: "", profileUrl: "", accessToken: "" },
+    { id: "google_business", name: "Google Business", connected: false, handle: "", profileUrl: "", accessToken: "" },
   ];
 }
+
+export const defaultIntegrations: Integrations = {
+  sms: {
+    connected: false,
+    accountSid: "",
+    authToken: "",
+    fromNumber: "",
+  },
+  email: {
+    connected: false,
+    provider: "resend",
+    apiKey: "",
+    fromEmail: "",
+    fromName: "",
+  },
+};
 
 export function createSeedSocialPosts(): SocialPost[] {
   return [

@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Link from "next/link";
+import { Plug } from "lucide-react";
 import { langLabels, t } from "@/lib/i18n";
 import type { Lang } from "@/lib/types";
 import { useStore } from "@/store/useStore";
@@ -31,6 +33,28 @@ export default function SettingsPage() {
         <h1 className="text-xl font-semibold text-slate-800">{t(language, "settings")}</h1>
         <p className="text-sm text-slate-500">Company branding and preferences</p>
       </div>
+
+      <Link
+        href="/dashboard/integrations"
+        className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-[var(--brand)]/40"
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--brand)]/10 text-[var(--brand)]">
+            <Plug className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-slate-800">
+              {t(language, "integrations")}
+            </div>
+            <div className="text-xs text-slate-500">
+              {t(language, "integrationsDesc")}
+            </div>
+          </div>
+        </div>
+        <span className="text-xs font-semibold text-[var(--brand)]">
+          {t(language, "manageIntegrations")} →
+        </span>
+      </Link>
 
       <form
         onSubmit={onSave}

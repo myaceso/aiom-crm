@@ -97,6 +97,8 @@ export type SocialConnection = {
   name: string;
   connected: boolean;
   handle?: string;
+  profileUrl?: string;
+  accessToken?: string;
 };
 
 export type SocialPostStatus = "draft" | "scheduled" | "published";
@@ -148,4 +150,26 @@ export type EmailTemplate = {
   name: string;
   subject: string;
   body: string;
+};
+
+export type SmsIntegration = {
+  connected: boolean;
+  accountSid: string;
+  authToken: string;
+  fromNumber: string;
+};
+
+export type EmailProvider = "resend" | "sendgrid";
+
+export type EmailIntegration = {
+  connected: boolean;
+  provider: EmailProvider;
+  apiKey: string;
+  fromEmail: string;
+  fromName: string;
+};
+
+export type Integrations = {
+  sms: SmsIntegration;
+  email: EmailIntegration;
 };

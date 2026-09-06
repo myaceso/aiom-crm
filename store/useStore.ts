@@ -18,6 +18,9 @@ import type {
   SmsCampaign,
   EmailCampaign,
   EmailTemplate,
+  Integrations,
+  SmsIntegration,
+  EmailIntegration,
 } from "@/lib/types";
 import {
   createSeedContacts,
@@ -31,6 +34,7 @@ import {
   createSeedEmailCampaigns,
   createSeedEmailTemplates,
   defaultSettings,
+  defaultIntegrations,
 } from "@/lib/seed";
 
 type Toast = { id: string; message: string } | null;
@@ -58,7 +62,15 @@ type Store = {
   addAppointment: (a: Omit<Appointment, "id">) => void;
   activity: Activity[];
   socialConnections: SocialConnection[];
-  toggleSocialConnection: (id: SocialNetworkId) => void;
+  connectSocial: (
+    id: SocialNetworkId,
+    data: { handle?: string; profileUrl?: string; accessToken?: string }
+  ) => void;
+  disconnectSocial: (id: SocialNetworkId) => void;
+  updateSocialDraft: (
+    id: SocialNetworkId,
+    data: Partial<Pick<SocialConnection, "handle" | "profileUrl" | "accessToken">>
+  ) => void;
   socialPosts: SocialPost[];
   addSocialPost: (p: {
     body: string;
@@ -85,6 +97,11 @@ type Store = {
     status: EmailCampaign["status"];
     scheduledAt: string | null;
   }) => void;
+  integrations: Integrations;
+  connectSms: (data: Omit<SmsIntegration, "connected">) => void;
+  disconnectSms: () => void;
+  connectEmail: (data: Omit<EmailIntegration, "connected">) => void;
+  disconnectEmail: () => void;
   toast: Toast;
   showToast: (message: string) => void;
   clearToast: () => void;
@@ -211,18 +228,36 @@ export const useStore = create<Store>()(
         })),
       activity: [],
       socialConnections: [],
-      toggleSocialConnection: (id) =>
+      connectSocial: (id, data) =>
         set((s) => ({
           socialConnections: s.socialConnections.map((c) =>
             c.id === id
               ? {
                   ...c,
-                  connected: !c.connected,
-                  handle: !c.connected
-                    ? c.handle || `@enone_${c.id}`
-                    : c.handle,
+                  connected: true,
+                  handle: data.handle?.trim() || c.handle || "",
+                  profileUrl: data.profileUrl?.trim() || c.profileUrl || "",
+                  accessToken: data.accessToken ?? c.accessToken ?? "",
                 }
               : c
+          ),
+        })),
+      disconnectSocial: (id) =>
+        set((s) => ({
+          socialConnections: s.socialConnections.map((c) =>
+            c.id === id
+              ? {
+                  ...c,
+                  connected: false,
+                  accessToken: "",
+                }
+              : c
+          ),
+        })),
+      updateSocialDraft: (id, data) =>
+        set((s) => ({
+          socialConnections: s.socialConnections.map((c) =>
+            c.id === id ? { ...c, ...data } : c
           ),
         })),
       socialPosts: [],
@@ -283,6 +318,46 @@ export const useStore = create<Store>()(
             ...s.emailCampaigns,
           ],
         })),
+      integrations: defaultIntegrations,
+      connectSms: (data) =>
+        set((s) => ({
+          integrations: {
+            ...s.integrations,
+            sms: {
+              connected: true,
+              accountSid: data.accountSid.trim(),
+              authToken: data.authToken.trim(),
+              fromNumber: data.fromNumber.trim(),
+            },
+          },
+        })),
+      disconnectSms: () =>
+        set((s) => ({
+          integrations: {
+            ...s.integrations,
+            sms: { ...defaultIntegrations.sms },
+          },
+        })),
+      connectEmail: (data) =>
+        set((s) => ({
+          integrations: {
+            ...s.integrations,
+            email: {
+              connected: true,
+              provider: data.provider,
+              apiKey: data.apiKey.trim(),
+              fromEmail: data.fromEmail.trim(),
+              fromName: data.fromName.trim(),
+            },
+          },
+        })),
+      disconnectEmail: () =>
+        set((s) => ({
+          integrations: {
+            ...s.integrations,
+            email: { ...defaultIntegrations.email },
+          },
+        })),
       toast: null,
       showToast: (message) => {
         const id = uid();
@@ -307,6 +382,17 @@ export const useStore = create<Store>()(
         }
         if (s.socialConnections.length === 0) {
           patch.socialConnections = createSeedSocialConnections();
+        } else if (
+          s.socialConnections.some(
+            (c) => c.profileUrl === undefined || c.accessToken === undefined
+          )
+        ) {
+          patch.socialConnections = s.socialConnections.map((c) => ({
+            ...c,
+            handle: c.handle || "",
+            profileUrl: c.profileUrl ?? "",
+            accessToken: c.accessToken ?? "",
+          }));
         }
         if (s.socialPosts.length === 0) {
           patch.socialPosts = createSeedSocialPosts();
@@ -319,6 +405,15 @@ export const useStore = create<Store>()(
         }
         if (s.emailCampaigns.length === 0) {
           patch.emailCampaigns = createSeedEmailCampaigns();
+        }
+        if (!s.integrations?.sms || !s.integrations?.email) {
+          patch.integrations = {
+            sms: { ...defaultIntegrations.sms, ...(s.integrations?.sms || {}) },
+            email: {
+              ...defaultIntegrations.email,
+              ...(s.integrations?.email || {}),
+            },
+          };
         }
         if (Object.keys(patch).length) set(patch);
       },
@@ -338,6 +433,7 @@ export const useStore = create<Store>()(
         smsCampaigns: s.smsCampaigns,
         emailCampaigns: s.emailCampaigns,
         emailTemplates: s.emailTemplates,
+        integrations: s.integrations,
         sidebarCollapsed: s.sidebarCollapsed,
       }),
       onRehydrateStorage: () => (state) => {

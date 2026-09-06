@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { Plus, X } from "lucide-react";
+import Link from "next/link";
+import { Plus, X, Plug, CheckCircle2 } from "lucide-react";
 import { format } from "date-fns";
 import { t } from "@/lib/i18n";
 import type { EmailCampaignStatus } from "@/lib/types";
@@ -28,6 +29,7 @@ export default function EmailMarketingPage() {
   const campaigns = useStore((s) => s.emailCampaigns);
   const templates = useStore((s) => s.emailTemplates);
   const addEmailCampaign = useStore((s) => s.addEmailCampaign);
+  const email = useStore((s) => s.integrations.email);
   const showToast = useStore((s) => s.showToast);
 
   const [open, setOpen] = useState(false);
@@ -38,6 +40,9 @@ export default function EmailMarketingPage() {
   const [templateId, setTemplateId] = useState("");
   const [status, setStatus] = useState<EmailCampaignStatus>("draft");
   const [scheduledAt, setScheduledAt] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const emailConnected = email.connected;
 
   const totals = useMemo(() => {
     const sent = campaigns.reduce((s, c) => s + c.sent, 0);
@@ -66,7 +71,7 @@ export default function EmailMarketingPage() {
     setOpen(false);
   }
 
-  function onCreate(e: FormEvent) {
+  async function onCreate(e: FormEvent) {
     e.preventDefault();
     if (!name.trim() || !subject.trim() || !body.trim()) {
       showToast(
@@ -80,6 +85,52 @@ export default function EmailMarketingPage() {
       showToast(language === "es" ? "Elige fecha y hora" : "Pick a schedule date");
       return;
     }
+    if (status === "sent") {
+      if (!emailConnected) {
+        showToast(t(language, "connectEmailRequired"));
+        return;
+      }
+      setSending(true);
+      try {
+        const res = await fetch("/api/email/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            campaign: {
+              name: name.trim(),
+              subject: subject.trim(),
+              body: body.trim(),
+              audience,
+            },
+            settings: email,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          showToast((data as { error?: string }).error || t(language, "sendFailed"));
+          return;
+        }
+        addEmailCampaign({
+          name: name.trim(),
+          subject: subject.trim(),
+          body: body.trim(),
+          audience,
+          templateId: templateId || undefined,
+          status: "sent",
+          scheduledAt: null,
+        });
+        showToast(
+          (data as { message?: string }).message || t(language, "sendSuccess")
+        );
+        reset();
+      } catch {
+        showToast(t(language, "sendFailed"));
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+
     addEmailCampaign({
       name: name.trim(),
       subject: subject.trim(),
@@ -87,12 +138,11 @@ export default function EmailMarketingPage() {
       audience,
       templateId: templateId || undefined,
       status,
-      scheduledAt: status === "scheduled" ? new Date(scheduledAt).toISOString() : null,
+      scheduledAt:
+        status === "scheduled" ? new Date(scheduledAt).toISOString() : null,
     });
     showToast(
-      language === "es"
-        ? "Campaña de email creada (demo)"
-        : "Email campaign created (demo)"
+      language === "es" ? "Campaña de email creada" : "Email campaign created"
     );
     reset();
   }
@@ -104,18 +154,34 @@ export default function EmailMarketingPage() {
           <h1 className="text-xl font-semibold text-slate-800">
             {t(language, "emailMarketing")}
           </h1>
-          <p className="text-sm text-slate-500">
-            {t(language, "mockStats")} — {language === "es" ? "sin APIs reales" : "no real APIs"}
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+            {emailConnected ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold uppercase text-emerald-700">
+                <CheckCircle2 className="h-3 w-3" />
+                {t(language, "connectedBadge")} · {email.provider} · {email.fromEmail}
+              </span>
+            ) : (
+              <span className="text-amber-700">{t(language, "connectEmailRequired")}</span>
+            )}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="brand-bg inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white"
-        >
-          <Plus className="h-4 w-4" />
-          {t(language, "createCampaign")}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/dashboard/integrations"
+            className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            <Plug className="h-4 w-4" />
+            {t(language, "manageIntegrations")}
+          </Link>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="brand-bg inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white"
+          >
+            <Plus className="h-4 w-4" />
+            {t(language, "createCampaign")}
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
@@ -246,6 +312,14 @@ export default function EmailMarketingPage() {
                 <X className="h-5 w-5" />
               </button>
             </div>
+            {!emailConnected && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                {t(language, "connectEmailRequired")}{" "}
+                <Link href="/dashboard/integrations" className="font-semibold underline">
+                  {t(language, "goToIntegrations")}
+                </Link>
+              </div>
+            )}
             <div>
               <label className="mb-1 block text-sm font-semibold text-slate-600">
                 {t(language, "templates")}
@@ -324,7 +398,10 @@ export default function EmailMarketingPage() {
                 >
                   <option value="draft">{t(language, "draft")}</option>
                   <option value="scheduled">{t(language, "scheduled")}</option>
-                  <option value="sent">{t(language, "sent")}</option>
+                  <option value="sent" disabled={!emailConnected}>
+                    {t(language, "sent")}
+                    {!emailConnected ? ` (${t(language, "notConnected")})` : ""}
+                  </option>
                 </select>
               </div>
               <div>
@@ -350,9 +427,10 @@ export default function EmailMarketingPage() {
               </button>
               <button
                 type="submit"
-                className="brand-bg rounded-md px-3 py-2 text-sm font-semibold text-white"
+                disabled={sending || (status === "sent" && !emailConnected)}
+                className="brand-bg rounded-md px-3 py-2 text-sm font-semibold text-white disabled:opacity-40"
               >
-                {t(language, "create")}
+                {status === "sent" ? t(language, "send") : t(language, "create")}
               </button>
             </div>
           </form>

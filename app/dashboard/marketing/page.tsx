@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Facebook,
   Instagram,
@@ -9,7 +10,8 @@ import {
   Music2,
   Building2,
   CheckCircle2,
-  Link2Off,
+  ExternalLink,
+  Plug,
 } from "lucide-react";
 import { format } from "date-fns";
 import { t } from "@/lib/i18n";
@@ -17,10 +19,7 @@ import type { SocialNetworkId, SocialPostStatus } from "@/lib/types";
 import { useStore } from "@/store/useStore";
 import clsx from "clsx";
 
-const NETWORK_ICONS: Record<
-  SocialNetworkId,
-  typeof Facebook
-> = {
+const NETWORK_ICONS: Record<SocialNetworkId, typeof Facebook> = {
   facebook: Facebook,
   instagram: Instagram,
   linkedin: Linkedin,
@@ -48,18 +47,19 @@ export default function MarketingPage() {
   const language = useStore((s) => s.settings.language);
   const connections = useStore((s) => s.socialConnections);
   const posts = useStore((s) => s.socialPosts);
-  const toggleSocialConnection = useStore((s) => s.toggleSocialConnection);
   const addSocialPost = useStore((s) => s.addSocialPost);
   const showToast = useStore((s) => s.showToast);
 
   const [body, setBody] = useState("");
   const [channels, setChannels] = useState<SocialNetworkId[]>([]);
   const [scheduledAt, setScheduledAt] = useState("");
+  const [publishing, setPublishing] = useState(false);
 
   const connectedIds = useMemo(
     () => new Set(connections.filter((c) => c.connected).map((c) => c.id)),
     [connections]
   );
+  const hasConnected = connectedIds.size > 0;
 
   function toggleChannel(id: SocialNetworkId) {
     if (!connectedIds.has(id)) return;
@@ -68,58 +68,126 @@ export default function MarketingPage() {
     );
   }
 
-  function submit(status: SocialPostStatus) {
+  async function submit(status: SocialPostStatus) {
+    if (!hasConnected) {
+      showToast(t(language, "connectRequired"));
+      return;
+    }
     if (!body.trim()) {
       showToast(language === "es" ? "Escribe un mensaje" : "Write a post first");
       return;
     }
     if (channels.length === 0) {
-      showToast(language === "es" ? "Selecciona al menos un canal" : "Select at least one channel");
+      showToast(
+        language === "es"
+          ? "Selecciona al menos un canal"
+          : "Select at least one channel"
+      );
       return;
     }
     if (status === "scheduled" && !scheduledAt) {
       showToast(language === "es" ? "Elige fecha y hora" : "Pick a schedule date");
       return;
     }
+
+    if (status === "published") {
+      setPublishing(true);
+      try {
+        const res = await fetch("/api/social/publish", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            body: body.trim(),
+            channels,
+            connections: connections.map((c) => ({
+              id: c.id,
+              connected: c.connected,
+              handle: c.handle,
+              profileUrl: c.profileUrl,
+              accessToken: c.accessToken,
+            })),
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          showToast(
+            (data as { error?: string }).error || t(language, "publishFailed")
+          );
+          return;
+        }
+        addSocialPost({
+          body: body.trim(),
+          channels,
+          status: "published",
+          scheduledAt: null,
+        });
+        setBody("");
+        setChannels([]);
+        setScheduledAt("");
+        showToast(t(language, "publishSuccess"));
+      } catch {
+        showToast(t(language, "publishFailed"));
+      } finally {
+        setPublishing(false);
+      }
+      return;
+    }
+
     addSocialPost({
       body: body.trim(),
       channels,
       status,
-      scheduledAt: status === "scheduled" ? new Date(scheduledAt).toISOString() : null,
+      scheduledAt:
+        status === "scheduled" ? new Date(scheduledAt).toISOString() : null,
     });
     setBody("");
     setChannels([]);
     setScheduledAt("");
-    const msg =
-      status === "published"
+    showToast(
+      status === "scheduled"
         ? language === "es"
-          ? "Publicación publicada (demo)"
-          : "Post published (demo)"
-        : status === "scheduled"
-          ? language === "es"
-            ? "Publicación programada"
-            : "Post scheduled"
-          : language === "es"
-            ? "Borrador guardado"
-            : "Draft saved";
-    showToast(msg);
+          ? "Publicación programada"
+          : "Post scheduled"
+        : language === "es"
+          ? "Borrador guardado"
+          : "Draft saved"
+    );
   }
 
   function onComposer(e: FormEvent) {
     e.preventDefault();
-    submit(scheduledAt ? "scheduled" : "published");
+    void submit(scheduledAt ? "scheduled" : "published");
   }
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-800">
-          {t(language, "marketing")}
-        </h1>
-        <p className="text-sm text-slate-500">
-          {t(language, "socialNetworks")} — {language === "es" ? "solo demo, sin APIs reales" : "mock only, no real APIs"}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-800">
+            {t(language, "marketing")}
+          </h1>
+          <p className="text-sm text-slate-500">{t(language, "socialNetworks")}</p>
+        </div>
+        <Link
+          href="/dashboard/integrations"
+          className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          <Plug className="h-4 w-4" />
+          {t(language, "manageIntegrations")}
+        </Link>
       </div>
+
+      {!hasConnected && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {t(language, "connectRequired")}{" "}
+          <Link
+            href="/dashboard/integrations"
+            className="font-semibold underline"
+          >
+            {t(language, "goToIntegrations")}
+          </Link>
+        </div>
+      )}
 
       <section>
         <h2 className="mb-3 text-sm font-semibold text-slate-700">
@@ -142,48 +210,34 @@ export default function MarketingPage() {
                   <Icon className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold text-slate-800">
-                    {c.name}
+                  <div className="flex items-center gap-2">
+                    <div className="truncate text-sm font-semibold text-slate-800">
+                      {c.name}
+                    </div>
+                    {c.connected && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">
+                        <CheckCircle2 className="h-3 w-3" />
+                        {t(language, "connectedBadge")}
+                      </span>
+                    )}
                   </div>
                   <div className="truncate text-xs text-slate-500">
                     {c.connected
                       ? c.handle || t(language, "connected")
                       : t(language, "notConnected")}
                   </div>
+                  {c.connected && c.profileUrl && (
+                    <a
+                      href={c.profileUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-[var(--brand)] hover:underline"
+                    >
+                      {t(language, "openProfile")}
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    toggleSocialConnection(c.id);
-                    showToast(
-                      c.connected
-                        ? language === "es"
-                          ? `${c.name} desconectado`
-                          : `${c.name} disconnected`
-                        : language === "es"
-                          ? `${c.name} conectado`
-                          : `${c.name} connected`
-                    );
-                  }}
-                  className={clsx(
-                    "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition",
-                    c.connected
-                      ? "border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
-                      : "brand-bg text-white"
-                  )}
-                >
-                  {c.connected ? (
-                    <>
-                      <Link2Off className="h-3.5 w-3.5" />
-                      {t(language, "disconnect")}
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      {t(language, "connect")}
-                    </>
-                  )}
-                </button>
               </div>
             );
           })}
@@ -258,21 +312,24 @@ export default function MarketingPage() {
           <div className="flex flex-wrap justify-end gap-2">
             <button
               type="button"
-              onClick={() => submit("draft")}
-              className="rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+              onClick={() => void submit("draft")}
+              disabled={!hasConnected}
+              className="rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
             >
               {t(language, "saveDraft")}
             </button>
             <button
               type="button"
-              onClick={() => submit("scheduled")}
-              className="rounded-md border border-[var(--brand)]/30 bg-[var(--brand)]/10 px-3 py-2 text-sm font-semibold text-[var(--brand)]"
+              onClick={() => void submit("scheduled")}
+              disabled={!hasConnected}
+              className="rounded-md border border-[var(--brand)]/30 bg-[var(--brand)]/10 px-3 py-2 text-sm font-semibold text-[var(--brand)] disabled:opacity-40"
             >
               {t(language, "schedulePost")}
             </button>
             <button
               type="submit"
-              className="brand-bg rounded-md px-3 py-2 text-sm font-semibold text-white"
+              disabled={!hasConnected || publishing}
+              className="brand-bg rounded-md px-3 py-2 text-sm font-semibold text-white disabled:opacity-40"
             >
               {t(language, "publishNow")}
             </button>
