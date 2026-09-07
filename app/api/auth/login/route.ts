@@ -21,10 +21,14 @@ export async function POST(req: Request) {
     }
 
     const user = await getUserByEmail(email);
-    if (!user || !user.active) {
+    if (!user) {
+      return NextResponse.json({ error: "invalid_credentials" }, { status: 401 });
+    }
+    if (!user.active) {
+      const pending = !user.emailVerifiedAt;
       return NextResponse.json(
-        { error: "invalid_credentials" },
-        { status: 401 }
+        { error: pending ? "pending_verification" : "account_inactive" },
+        { status: 403 }
       );
     }
 

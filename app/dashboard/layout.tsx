@@ -17,7 +17,7 @@ export default function DashboardLayout({
   const hydrated = useStore((s) => s.hydrated);
   const authReady = useStore((s) => s.authReady);
   const refreshAuth = useStore((s) => s.refreshAuth);
-  const ensureSeed = useStore((s) => s.ensureSeed);
+  const crmReady = useStore((s) => s.crmReady);
   const mobileNavOpen = useStore((s) => s.mobileNavOpen);
   const setMobileNavOpen = useStore((s) => s.setMobileNavOpen);
   const users = useStore((s) => s.users);
@@ -33,14 +33,14 @@ export default function DashboardLayout({
     if (!session || !currentUser || !currentUser.active) {
       if (session && (!currentUser || !currentUser.active)) void logout();
       router.replace("/login");
-    } else ensureSeed();
+    }
   }, [
     hydrated,
     authReady,
     session,
     currentUser,
     router,
-    ensureSeed,
+    crmReady,
     logout,
   ]);
 
@@ -56,6 +56,7 @@ export default function DashboardLayout({
   if (
     !hydrated ||
     !authReady ||
+    !crmReady ||
     !session ||
     !currentUser ||
     !currentUser.active

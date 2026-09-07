@@ -188,6 +188,7 @@ export function buildAdminUser(input: {
     role: "admin",
     permissions: [...ALL_PERMISSIONS],
     active: true,
+    emailVerifiedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
   };
 }
@@ -211,6 +212,31 @@ export function buildStaffUser(input: {
         ? [...ALL_PERMISSIONS]
         : input.permissions.filter((p) => p !== "users"),
     active: true,
+    emailVerifiedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
   };
+}
+
+export function buildPendingSignup(input: {
+  name: string;
+  email: string;
+  passwordHash: string;
+}): StoredUser {
+  return {
+    id: newUserId(),
+    name: input.name.trim(),
+    email: input.email.trim().toLowerCase(),
+    passwordHash: input.passwordHash,
+    role: "staff",
+    permissions: [],
+    active: false,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+export async function getAdminNotificationEmail(): Promise<string | null> {
+  const configured = process.env.ADMIN_NOTIFY_EMAIL?.trim().toLowerCase();
+  if (configured) return configured;
+  const users = await listUsers();
+  return users.find((user) => user.role === "admin" && user.active)?.email || null;
 }

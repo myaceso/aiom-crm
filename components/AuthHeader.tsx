@@ -22,6 +22,9 @@ export default function AuthHeader() {
         >
           {t(language, "signIn")}
         </Link>
+        <Link href="/signup" className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-500">
+          {t(language, "signUp")}
+        </Link>
         {hydrated && authReady && session && (
           <Link
             href="/dashboard/start-here"

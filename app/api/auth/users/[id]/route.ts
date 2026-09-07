@@ -84,6 +84,10 @@ export async function PATCH(req: Request, { params }: Ctx) {
       role: nextRole,
       permissions: nextPermissions,
       active: nextActive,
+      emailVerifiedAt:
+        nextActive && !target.emailVerifiedAt
+          ? new Date().toISOString()
+          : target.emailVerifiedAt,
     };
     await saveUser(updated);
     return NextResponse.json({ user: toPublicUser(updated) });

@@ -29,6 +29,7 @@ import type {
   Session,
   PermissionKey,
   UserRole,
+  CrmState,
 } from "@/lib/types";
 import {
   createSeedContacts,
@@ -58,6 +59,8 @@ type Store = {
   needsBootstrap: boolean;
   users: SafeUser[];
   session: Session | null;
+  crmReady: boolean;
+  loadCrm: () => Promise<void>;
   refreshAuth: () => Promise<void>;
   fetchUsers: () => Promise<void>;
   bootstrapAdmin: (data: {
@@ -87,6 +90,7 @@ type Store = {
   deactivateUser: (
     id: string
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
+  resendVerification: (id: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   settings: Settings;
   updateSettings: (partial: Partial<Settings>) => void;
   setLanguage: (lang: Lang) => void;
@@ -183,6 +187,55 @@ export const useStore = create<Store>()(
       needsBootstrap: false,
       users: [],
       session: null,
+      crmReady: false,
+      loadCrm: async () => {
+        const session = get().session;
+        if (!session) {
+          set({ crmReady: false });
+          return;
+        }
+        set({ crmReady: false });
+        try {
+          const res = await fetch("/api/crm/state", {
+            credentials: "include",
+            cache: "no-store",
+          });
+          if (!res.ok) throw new Error("crm_load_failed");
+          const data = await res.json();
+          if (data.state) {
+            const state = data.state as CrmState;
+            set({
+              ...state,
+              mediaAssets: (state.mediaAssets || []).map((m) => ({
+                ...m,
+                previewUrl: undefined,
+              })),
+              crmReady: true,
+            });
+          } else {
+            set({
+              settings: defaultSettings,
+              contacts: [],
+              opportunities: [],
+              conversations: [],
+              appointments: [],
+              activity: [],
+              socialConnections: [],
+              socialPosts: [],
+              mediaAssets: [],
+              smsCampaigns: [],
+              emailCampaigns: [],
+              emailTemplates: [],
+              integrations: defaultIntegrations,
+              messagingSends: [],
+              crmReady: true,
+            });
+            get().ensureSeed();
+          }
+        } catch {
+          set({ crmReady: true });
+        }
+      },
       refreshAuth: async () => {
         try {
           const res = await fetch("/api/auth/me", {
@@ -206,6 +259,9 @@ export const useStore = create<Store>()(
               ],
             }));
             if (user.role === "admin") void get().fetchUsers();
+            void get().loadCrm();
+          } else {
+            set({ crmReady: false });
           }
         } catch {
           set({ authReady: true, session: null, needsBootstrap: false });
@@ -248,6 +304,7 @@ export const useStore = create<Store>()(
             users: [user],
             authReady: true,
           });
+          void get().loadCrm();
           return { ok: true as const };
         } catch {
           return { ok: false as const, error: "server_error" };
@@ -276,6 +333,7 @@ export const useStore = create<Store>()(
             needsBootstrap: false,
           });
           if (user.role === "admin") void get().fetchUsers();
+          void get().loadCrm();
           return { ok: true as const };
         } catch {
           return { ok: false as const, error: "server_error" };
@@ -290,7 +348,7 @@ export const useStore = create<Store>()(
         } catch {
           /* ignore */
         }
-        set({ session: null });
+        set({ session: null, crmReady: false, contacts: [], opportunities: [], conversations: [], appointments: [], activity: [], socialConnections: [], socialPosts: [], mediaAssets: [], smsCampaigns: [], emailCampaigns: [], emailTemplates: [], integrations: defaultIntegrations, messagingSends: [] });
       },
       currentUser: () => {
         const s = get();
@@ -374,6 +432,20 @@ export const useStore = create<Store>()(
             session: s.session?.userId === id ? null : s.session,
           }));
           return { ok: true as const };
+        } catch {
+          return { ok: false as const, error: "server_error" };
+        }
+      },
+      resendVerification: async (id) => {
+        try {
+          const res = await fetch(`/api/auth/users/${id}/resend`, {
+            method: "POST",
+            credentials: "include",
+          });
+          const data = await res.json().catch(() => ({}));
+          return res.ok
+            ? { ok: true as const }
+            : { ok: false as const, error: (data.error as string) || "server_error" };
         } catch {
           return { ok: false as const, error: "server_error" };
         }
@@ -786,23 +858,9 @@ export const useStore = create<Store>()(
     }),
     {
       name: "enone-crm",
-      partialize: (s) => ({
-        settings: s.settings,
-        contacts: s.contacts,
-        opportunities: s.opportunities,
-        conversations: s.conversations,
-        appointments: s.appointments,
-        activity: s.activity,
-        socialConnections: s.socialConnections,
-        socialPosts: s.socialPosts,
-        mediaAssets: (s.mediaAssets || []).map((m) => ({ id: m.id, kind: m.kind, name: m.name, size: m.size, mime: m.mime, createdAt: m.createdAt, durationSec: m.durationSec })),
-        smsCampaigns: s.smsCampaigns,
-        emailCampaigns: s.emailCampaigns,
-        emailTemplates: s.emailTemplates,
-        integrations: s.integrations,
-        messagingSends: s.messagingSends,
-        sidebarCollapsed: s.sidebarCollapsed,
-      }),
+      version: 2,
+      migrate: (persisted: any) => ({ sidebarCollapsed: !!persisted?.sidebarCollapsed }),
+      partialize: (s) => ({ sidebarCollapsed: s.sidebarCollapsed }),
       onRehydrateStorage: () => (state) => {
         if (state && (state.settings.language as string) === "de") {
           state.updateSettings({ language: "es" });
@@ -814,9 +872,50 @@ export const useStore = create<Store>()(
           state.authReady = false;
         }
         state?.setHydrated(true);
-        state?.ensureSeed();
         void state?.refreshAuth();
       },
     }
   )
 );
+
+const CRM_SYNC_KEYS = [
+  "settings","contacts","opportunities","conversations","appointments","activity",
+  "socialConnections","socialPosts","mediaAssets","smsCampaigns","emailCampaigns",
+  "emailTemplates","integrations","messagingSends",
+] as const;
+
+let crmSyncTimer: ReturnType<typeof setTimeout> | null = null;
+let lastSyncedUserId: string | null = null;
+
+if (typeof window !== "undefined") {
+  useStore.subscribe((state, prev) => {
+    if (!state.session || !state.crmReady) {
+      if (!state.session) lastSyncedUserId = null;
+      return;
+    }
+    if (state.session.userId !== lastSyncedUserId) { lastSyncedUserId = state.session.userId; return; }
+    const changed = CRM_SYNC_KEYS.some((key) => state[key] !== prev[key]);
+    if (!changed) return;
+    if (crmSyncTimer) clearTimeout(crmSyncTimer);
+    crmSyncTimer = setTimeout(async () => {
+      const current = useStore.getState();
+      if (!current.session || !current.crmReady) return;
+      const payload = {
+        settings: current.settings, contacts: current.contacts, opportunities: current.opportunities,
+        conversations: current.conversations, appointments: current.appointments, activity: current.activity,
+        socialConnections: current.socialConnections, socialPosts: current.socialPosts,
+        mediaAssets: (current.mediaAssets || []).map(({ previewUrl: _p, ...m }) => m),
+        smsCampaigns: current.smsCampaigns, emailCampaigns: current.emailCampaigns,
+        emailTemplates: current.emailTemplates, integrations: current.integrations,
+        messagingSends: current.messagingSends,
+      };
+      try {
+        await fetch("/api/crm/state", {
+          method: "PUT", credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } catch { /* ignore transient sync errors */ }
+    }, 800);
+  });
+}

@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import AuthHeader from "@/components/AuthHeader";
 import { t } from "@/lib/i18n";
@@ -10,6 +10,7 @@ import { useStore } from "@/store/useStore";
 
 export default function LoginPage() {
   const router = useRouter();
+  const search = useSearchParams();
   const language = useStore((s) => s.settings.language);
   const login = useStore((s) => s.login);
   const logout = useStore((s) => s.logout);
@@ -25,15 +26,25 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState("");
 
   useEffect(() => {
     if (hydrated && !authReady) void refreshAuth();
   }, [hydrated, authReady, refreshAuth]);
 
+  useEffect(() => {
+    const verification = search.get("verification");
+    if (verification === "success") setInfo(t(language, "verificationSuccess"));
+    if (verification === "invalid") setError(t(language, "verificationInvalid"));
+  }, [search, language]);
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
+    setInfo("");
+    setPendingEmail("");
     if (!email.trim()) {
       setError(t(language, "emailRequired"));
       return;
@@ -47,7 +58,6 @@ export default function LoginPage() {
       if (needsBootstrap) {
         if (!name.trim()) {
           setError(t(language, "requiredFields"));
-          setBusy(false);
           return;
         }
         const res = await bootstrapAdmin({
@@ -61,18 +71,48 @@ export default function LoginPage() {
               ? t(language, "haveAccount")
               : t(language, "requiredFields")
           );
-          setBusy(false);
           return;
         }
       } else {
         const res = await login(email.trim(), password);
         if (!res.ok) {
-          setError(t(language, "invalidCredentials"));
-          setBusy(false);
+          if (res.error === "pending_verification") {
+            setPendingEmail(email.trim());
+            setError(t(language, "pendingVerification"));
+          } else if (res.error === "account_inactive") {
+            setError(t(language, "accountInactive"));
+          } else {
+            setError(t(language, "invalidCredentials"));
+          }
           return;
         }
       }
       router.push("/dashboard/start-here");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleResend() {
+    if (!pendingEmail) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/auth/resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: pendingEmail }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(
+          data.error === "email_not_configured"
+            ? t(language, "emailNotConfigured")
+            : t(language, "serverError")
+        );
+        return;
+      }
+      setInfo(t(language, "verificationResent"));
+      setError("");
     } finally {
       setBusy(false);
     }
@@ -84,6 +124,7 @@ export default function LoginPage() {
     setPassword("");
     setName("");
     setError("");
+    setInfo("");
     await refreshAuth();
   }
 
@@ -139,12 +180,18 @@ export default function LoginPage() {
                   ? t(language, "bootstrapTitle")
                   : t(language, "signInTitle")}
               </h1>
-              {isBootstrap && (
+              {isBootstrap ? (
                 <p className="mb-6 text-center text-sm text-slate-500">
                   {t(language, "bootstrapSubtitle")}
                 </p>
+              ) : (
+                <p className="mb-6 text-center text-sm text-slate-500">
+                  {t(language, "noAccountPrompt")}{" "}
+                  <Link href="/signup" className="font-semibold text-[#6366f1] hover:underline">
+                    {t(language, "createAccount")}
+                  </Link>
+                </p>
               )}
-              {!isBootstrap && <div className="mb-6" />}
               <form onSubmit={onSubmit} className="space-y-5">
                 {isBootstrap && (
                   <div>
@@ -184,9 +231,7 @@ export default function LoginPage() {
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder={t(language, "passwordPlaceholder")}
                       className="w-full rounded-md border border-[#d1d5db] px-3 py-2.5 pr-10 text-sm text-[#374151] outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-[#6366f1]/35"
-                      autoComplete={
-                        isBootstrap ? "new-password" : "current-password"
-                      }
+                      autoComplete={isBootstrap ? "new-password" : "current-password"}
                     />
                     <button
                       type="button"
@@ -194,46 +239,48 @@ export default function LoginPage() {
                       className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                       aria-label="Toggle password"
                     >
-                      {show ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
+                      {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
                   {!isBootstrap && (
                     <div className="mt-2 flex justify-end">
-                      <Link
-                        href="/reset-password"
-                        className="text-sm font-medium text-[#6366f1] hover:underline"
-                      >
+                      <Link href="/reset-password" className="text-sm font-medium text-[#6366f1] hover:underline">
                         {t(language, "forgotPassword")}
                       </Link>
                     </div>
                   )}
                 </div>
                 {error && <p className="text-sm text-red-500">{error}</p>}
+                {info && <p className="text-sm text-emerald-600">{info}</p>}
+                {pendingEmail && (
+                  <button
+                    type="button"
+                    onClick={() => void handleResend()}
+                    disabled={busy}
+                    className="text-sm font-semibold text-[#6366f1] hover:underline disabled:opacity-60"
+                  >
+                    {t(language, "resendVerification")}
+                  </button>
+                )}
                 <button
                   type="submit"
                   disabled={busy}
                   className="brand-bg w-full rounded-md py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
                 >
-                  {isBootstrap
-                    ? t(language, "createAdmin")
-                    : t(language, "signIn")}
+                  {isBootstrap ? t(language, "createAdmin") : t(language, "signIn")}
                 </button>
               </form>
-              {isBootstrap && (
-                <p className="mt-4 text-center text-xs text-slate-500">
-                  {t(language, "noAccountYet")}
+              {!isBootstrap && (
+                <p className="mt-6 text-center text-sm text-slate-500">
+                  {t(language, "noAccountPrompt")}{" "}
+                  <Link href="/signup" className="font-semibold text-[#6366f1] hover:underline">
+                    {t(language, "signUp")}
+                  </Link>
                 </p>
               )}
               <p className="mt-6 text-center text-xs leading-relaxed text-[#607179]">
                 {t(language, "terms")}{" "}
-                <a
-                  href="#"
-                  className="font-medium text-[#6366f1] hover:underline"
-                >
+                <a href="#" className="font-medium text-[#6366f1] hover:underline">
                   {t(language, "termsLink")}
                 </a>
                 .

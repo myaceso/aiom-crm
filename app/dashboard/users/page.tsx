@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Pencil, UserPlus, UserX, UserCheck } from "lucide-react";
+import { Pencil, UserPlus, UserX, UserCheck, Mail } from "lucide-react";
 import {
   ALL_PERMISSIONS,
   STAFF_PERMISSIONS,
@@ -55,6 +55,7 @@ export default function UsersPage() {
   const createUser = useStore((s) => s.createUser);
   const updateUser = useStore((s) => s.updateUser);
   const deactivateUser = useStore((s) => s.deactivateUser);
+  const resendVerification = useStore((s) => s.resendVerification);
   const showToast = useStore((s) => s.showToast);
   const fetchUsers = useStore((s) => s.fetchUsers);
 
@@ -274,12 +275,16 @@ export default function UsersPage() {
                         "rounded-full px-2 py-0.5 text-xs font-semibold",
                         u.active
                           ? "bg-emerald-50 text-emerald-700"
-                          : "bg-rose-50 text-rose-600"
+                          : !u.emailVerifiedAt
+                            ? "bg-amber-50 text-amber-700"
+                            : "bg-rose-50 text-rose-600"
                       )}
                     >
                       {u.active
                         ? t(language, "active")
-                        : t(language, "inactive")}
+                        : !u.emailVerifiedAt
+                          ? t(language, "pending")
+                          : t(language, "inactive")}
                     </span>
                   </td>
                   <td className="px-4 py-3">
@@ -292,6 +297,28 @@ export default function UsersPage() {
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
+                      {!u.active && !u.emailVerifiedAt && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const res = await resendVerification(u.id);
+                            showToast(
+                              res.ok
+                                ? t(language, "verificationResent")
+                                : t(
+                                    language,
+                                    res.error === "email_not_configured"
+                                      ? "emailNotConfigured"
+                                      : "serverError"
+                                  )
+                            );
+                          }}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"
+                          title={t(language, "resendVerification")}
+                        >
+                          <Mail className="h-4 w-4" />
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => toggleActive(u)}
@@ -299,7 +326,7 @@ export default function UsersPage() {
                         title={
                           u.active
                             ? t(language, "deactivate")
-                            : t(language, "reactivate")
+                            : t(language, "activateManually")
                         }
                       >
                         {u.active ? (

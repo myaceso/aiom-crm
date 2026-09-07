@@ -254,7 +254,25 @@ export type AppUser = {
   role: UserRole;
   permissions: PermissionKey[];
   active: boolean;
+  emailVerifiedAt?: string;
   createdAt: string;
+};
+
+export type CrmState = {
+  settings: Settings;
+  contacts: Contact[];
+  opportunities: Opportunity[];
+  conversations: Conversation[];
+  appointments: Appointment[];
+  activity: Activity[];
+  socialConnections: SocialConnection[];
+  socialPosts: SocialPost[];
+  mediaAssets: MediaAsset[];
+  smsCampaigns: SmsCampaign[];
+  emailCampaigns: EmailCampaign[];
+  emailTemplates: EmailTemplate[];
+  integrations: Integrations;
+  messagingSends: MessagingSend[];
 };
 
 export type Session = {
