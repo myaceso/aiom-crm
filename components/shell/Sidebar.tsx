@@ -28,10 +28,12 @@ import {
   X,
   Phone,
   Send,
+  UserCog,
 } from "lucide-react";
 import Logo from "@/components/Logo";
 import { t, type DictKey } from "@/lib/i18n";
 import { useStore } from "@/store/useStore";
+import { hasPermission, isAdmin, permissionForHref } from "@/lib/auth";
 import clsx from "clsx";
 
 type NavItem = { href: string; key: DictKey; icon: typeof LayoutDashboard };
@@ -67,6 +69,19 @@ export default function Sidebar() {
   const toggleSidebar = useStore((s) => s.toggleSidebar);
   const mobileNavOpen = useStore((s) => s.mobileNavOpen);
   const setMobileNavOpen = useStore((s) => s.setMobileNavOpen);
+  const users = useStore((s) => s.users);
+  const session = useStore((s) => s.session);
+  const currentUser = users.find((u) => u.id === session?.userId) ?? null;
+  const admin = isAdmin(currentUser);
+
+  function canSee(href: string) {
+    const perm = permissionForHref(href);
+    if (!perm) return true;
+    return hasPermission(currentUser, perm);
+  }
+
+  const primaryItems = primary.filter((i) => canSee(i.href));
+  const secondaryItems = secondary.filter((i) => canSee(i.href));
 
   // Mobile drawer always shows labels; desktop respects collapse.
   const expanded = mobileNavOpen || !collapsed;
@@ -197,13 +212,16 @@ export default function Sidebar() {
       </div>
 
       <nav className="mt-1 flex-1 space-y-0.5 overflow-y-auto py-1">
-        {primary.map(renderItem)}
+        {primaryItems.map(renderItem)}
         <div className="mx-4 my-2 border-t border-slate-200" />
-        {secondary.map(renderItem)}
+        {secondaryItems.map(renderItem)}
       </nav>
 
-      <div className="border-t border-slate-100 p-2 pb-4">
-        {renderItem({ href: "/dashboard/settings", key: "settings", icon: Settings })}
+      <div className="border-t border-slate-100 p-2 pb-4 space-y-0.5">
+        {admin &&
+          renderItem({ href: "/dashboard/users", key: "users", icon: UserCog })}
+        {canSee("/dashboard/settings") &&
+          renderItem({ href: "/dashboard/settings", key: "settings", icon: Settings })}
       </div>
 
       <button

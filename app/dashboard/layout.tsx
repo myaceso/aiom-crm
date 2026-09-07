@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/shell/Sidebar";
 import TopBar from "@/components/shell/TopBar";
+import PermissionGate from "@/components/PermissionGate";
 import { useStore } from "@/store/useStore";
 
 export default function DashboardLayout({
@@ -18,11 +19,17 @@ export default function DashboardLayout({
   const mobileNavOpen = useStore((s) => s.mobileNavOpen);
   const setMobileNavOpen = useStore((s) => s.setMobileNavOpen);
 
+  const users = useStore((s) => s.users);
+  const logout = useStore((s) => s.logout);
+  const currentUser = users.find((u) => u.id === session?.userId) ?? null;
+
   useEffect(() => {
     if (!hydrated) return;
-    if (!session) router.replace("/login");
-    else ensureSeed();
-  }, [hydrated, session, router, ensureSeed]);
+    if (!session || !currentUser || !currentUser.active) {
+      if (session && (!currentUser || !currentUser.active)) logout();
+      router.replace("/login");
+    } else ensureSeed();
+  }, [hydrated, session, currentUser, router, ensureSeed, logout]);
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
@@ -33,7 +40,7 @@ export default function DashboardLayout({
     return () => mq.removeEventListener("change", onChange);
   }, [setMobileNavOpen]);
 
-  if (!hydrated || !session) {
+  if (!hydrated || !session || !currentUser || !currentUser.active) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#f2f7fa]">
         <div className="boot-spinner" />
@@ -55,7 +62,7 @@ export default function DashboardLayout({
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar />
         <main className="flex-1 overflow-x-hidden overflow-y-auto p-3 sm:p-4 md:p-5">
-          {children}
+          <PermissionGate>{children}</PermissionGate>
         </main>
       </div>
     </div>

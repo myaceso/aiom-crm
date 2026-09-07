@@ -12,19 +12,24 @@ export default function LoginPage() {
   const router = useRouter();
   const language = useStore((s) => s.settings.language);
   const login = useStore((s) => s.login);
+  const bootstrapAdmin = useStore((s) => s.bootstrapAdmin);
   const session = useStore((s) => s.session);
   const hydrated = useStore((s) => s.hydrated);
+  const users = useStore((s) => s.users);
 
+  const needsBootstrap = hydrated && users.length === 0;
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (hydrated && session) router.replace("/dashboard/start-here");
   }, [hydrated, session, router]);
 
-  function onSubmit(e: FormEvent) {
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
     if (!email.trim()) {
@@ -32,22 +37,78 @@ export default function LoginPage() {
       return;
     }
     if (password.length < 4) {
-      setError("Password must be at least 4 characters.");
+      setError(t(language, "passwordTooShort"));
       return;
     }
-    login(email.trim());
-    router.push("/dashboard/start-here");
+    setBusy(true);
+    try {
+      if (needsBootstrap) {
+        if (!name.trim()) {
+          setError(t(language, "requiredFields"));
+          setBusy(false);
+          return;
+        }
+        const res = await bootstrapAdmin({
+          name: name.trim(),
+          email: email.trim(),
+          password,
+        });
+        if (!res.ok) {
+          setError(
+            res.error === "users_exist"
+              ? t(language, "haveAccount")
+              : t(language, "requiredFields")
+          );
+          setBusy(false);
+          return;
+        }
+      } else {
+        const res = await login(email.trim(), password);
+        if (!res.ok) {
+          setError(t(language, "invalidCredentials"));
+          setBusy(false);
+          return;
+        }
+      }
+      router.push("/dashboard/start-here");
+    } finally {
+      setBusy(false);
+    }
   }
+
+  const isBootstrap = needsBootstrap;
 
   return (
     <div className="flex min-h-screen flex-col bg-[#f8fafc]">
       <AuthHeader />
       <main className="flex flex-1 items-center justify-center px-4 py-8 sm:py-10">
         <div className="w-full max-w-[440px] rounded-lg bg-white p-5 shadow-card sm:p-8 md:p-10">
-          <h1 className="mb-8 text-center text-[22px] font-semibold text-[#4b5563]">
-            {t(language, "signInTitle")}
+          <h1 className="mb-2 text-center text-[22px] font-semibold text-[#4b5563]">
+            {isBootstrap
+              ? t(language, "bootstrapTitle")
+              : t(language, "signInTitle")}
           </h1>
+          {isBootstrap && (
+            <p className="mb-6 text-center text-sm text-slate-500">
+              {t(language, "bootstrapSubtitle")}
+            </p>
+          )}
+          {!isBootstrap && <div className="mb-6" />}
           <form onSubmit={onSubmit} className="space-y-5">
+            {isBootstrap && (
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-[#607179]">
+                  {t(language, "userName")}
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full rounded-md border border-[#d1d5db] px-3 py-2.5 text-sm text-[#374151] outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-[#6366f1]/35"
+                  autoComplete="name"
+                />
+              </div>
+            )}
             <div>
               <label className="mb-1.5 block text-sm font-semibold text-[#607179]">
                 {t(language, "email")}
@@ -72,7 +133,9 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={t(language, "passwordPlaceholder")}
                   className="w-full rounded-md border border-[#d1d5db] px-3 py-2.5 pr-10 text-sm text-[#374151] outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-[#6366f1]/35"
-                  autoComplete="current-password"
+                  autoComplete={
+                    isBootstrap ? "new-password" : "current-password"
+                  }
                 />
                 <button
                   type="button"
@@ -80,26 +143,38 @@ export default function LoginPage() {
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                   aria-label="Toggle password"
                 >
-                  {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {show ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
                 </button>
               </div>
-              <div className="mt-2 flex justify-end">
-                <Link
-                  href="/reset-password"
-                  className="text-sm font-medium text-[#6366f1] hover:underline"
-                >
-                  {t(language, "forgotPassword")}
-                </Link>
-              </div>
+              {!isBootstrap && (
+                <div className="mt-2 flex justify-end">
+                  <Link
+                    href="/reset-password"
+                    className="text-sm font-medium text-[#6366f1] hover:underline"
+                  >
+                    {t(language, "forgotPassword")}
+                  </Link>
+                </div>
+              )}
             </div>
             {error && <p className="text-sm text-red-500">{error}</p>}
             <button
               type="submit"
-              className="brand-bg w-full rounded-md py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+              disabled={busy}
+              className="brand-bg w-full rounded-md py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
             >
-              {t(language, "signIn")}
+              {isBootstrap ? t(language, "createAdmin") : t(language, "signIn")}
             </button>
           </form>
+          {needsBootstrap && (
+            <p className="mt-4 text-center text-xs text-slate-500">
+              {t(language, "noAccountYet")}
+            </p>
+          )}
           <p className="mt-6 text-center text-xs leading-relaxed text-[#607179]">
             {t(language, "terms")}{" "}
             <a href="#" className="font-medium text-[#6366f1] hover:underline">

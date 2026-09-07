@@ -10,6 +10,8 @@ export default function TopBar() {
   const router = useRouter();
   const language = useStore((s) => s.settings.language);
   const session = useStore((s) => s.session);
+  const users = useStore((s) => s.users);
+  const currentUser = users.find((u) => u.id === session?.userId) ?? null;
   const logout = useStore((s) => s.logout);
   const setMobileNavOpen = useStore((s) => s.setMobileNavOpen);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -28,7 +30,8 @@ export default function TopBar() {
     router.push("/login");
   }
 
-  const initial = (session?.email?.[0] || "D").toUpperCase();
+  const displayName = currentUser?.name || session?.email || "";
+  const initial = (displayName?.[0] || "D").toUpperCase();
 
   return (
     <header
@@ -78,8 +81,20 @@ export default function TopBar() {
         {menuOpen && (
           <div className="absolute right-0 top-full z-40 mt-1 w-52 rounded-md border border-slate-200 bg-white py-1 shadow-lg">
             <div className="border-b border-slate-100 px-3 py-2 text-xs text-slate-500">
+              <div className="font-medium text-slate-700">{currentUser?.name}</div>
               {session?.email}
             </div>
+            {currentUser?.role === "admin" && (
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  router.push("/dashboard/users");
+                }}
+                className="block min-h-[40px] w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+              >
+                {t(language, "users")}
+              </button>
+            )}
             <button
               onClick={() => {
                 setMenuOpen(false);

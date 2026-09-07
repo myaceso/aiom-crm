@@ -226,3 +226,38 @@ export type Integrations = {
   whatsapp: WhatsAppIntegration;
   telegram: TelegramIntegration;
 };
+
+export type PermissionKey =
+  | "contacts"
+  | "conversations"
+  | "opportunities"
+  | "marketing"
+  | "sms"
+  | "email"
+  | "whatsapp"
+  | "telegram"
+  | "integrations"
+  | "reporting"
+  | "payments"
+  | "sites"
+  | "calendars"
+  | "settings"
+  | "users";
+
+export type UserRole = "admin" | "staff";
+
+export type AppUser = {
+  id: string;
+  name: string;
+  email: string;
+  passwordHash: string;
+  role: UserRole;
+  permissions: PermissionKey[];
+  active: boolean;
+  createdAt: string;
+};
+
+export type Session = {
+  userId: string;
+  email: string;
+};

@@ -25,7 +25,17 @@ import type {
   WhatsAppIntegration,
   TelegramIntegration,
   MessagingSend,
+  AppUser,
+  Session,
+  PermissionKey,
+  UserRole,
 } from "@/lib/types";
+import {
+  hashPassword,
+  verifyPassword,
+  normalizeEmail,
+  ALL_PERMISSIONS,
+} from "@/lib/auth";
 import {
   createSeedContacts,
   createSeedOpportunities,
@@ -50,9 +60,33 @@ type Toast = { id: string; message: string } | null;
 type Store = {
   hydrated: boolean;
   setHydrated: (v: boolean) => void;
-  session: { email: string } | null;
-  login: (email: string) => void;
+  users: AppUser[];
+  session: Session | null;
+  bootstrapAdmin: (data: {
+    name: string;
+    email: string;
+    password: string;
+  }) => Promise<{ ok: true } | { ok: false; error: string }>;
+  login: (
+    email: string,
+    password: string
+  ) => Promise<{ ok: true } | { ok: false; error: string }>;
   logout: () => void;
+  currentUser: () => AppUser | null;
+  createUser: (data: {
+    name: string;
+    email: string;
+    password: string;
+    role?: UserRole;
+    permissions: PermissionKey[];
+  }) => Promise<{ ok: true; user: AppUser } | { ok: false; error: string }>;
+  updateUser: (
+    id: string,
+    partial: Partial<
+      Pick<AppUser, "name" | "email" | "role" | "permissions" | "active">
+    > & { password?: string }
+  ) => Promise<{ ok: true } | { ok: false; error: string }>;
+  deactivateUser: (id: string) => { ok: true } | { ok: false; error: string };
   settings: Settings;
   updateSettings: (partial: Partial<Settings>) => void;
   setLanguage: (lang: Lang) => void;
@@ -145,9 +179,177 @@ export const useStore = create<Store>()(
     (set, get) => ({
       hydrated: false,
       setHydrated: (v) => set({ hydrated: v }),
+      users: [],
       session: null,
-      login: (email) => set({ session: { email } }),
+      bootstrapAdmin: async ({ name, email, password }) => {
+        const s = get();
+        if (s.users.length > 0) {
+          return { ok: false as const, error: "users_exist" };
+        }
+        const cleanEmail = normalizeEmail(email);
+        if (!cleanEmail || !name.trim() || password.length < 4) {
+          return { ok: false as const, error: "invalid" };
+        }
+        const passwordHash = await hashPassword(password);
+        const user: AppUser = {
+          id: uid(),
+          name: name.trim(),
+          email: cleanEmail,
+          passwordHash,
+          role: "admin",
+          permissions: [...ALL_PERMISSIONS],
+          active: true,
+          createdAt: new Date().toISOString(),
+        };
+        set({
+          users: [user],
+          session: { userId: user.id, email: user.email },
+        });
+        return { ok: true as const };
+      },
+      login: async (email, password) => {
+        const cleanEmail = normalizeEmail(email);
+        const user = get().users.find((u) => u.email === cleanEmail);
+        if (!user || !user.active) {
+          return { ok: false as const, error: "invalid_credentials" };
+        }
+        const valid = await verifyPassword(password, user.passwordHash);
+        if (!valid) {
+          return { ok: false as const, error: "invalid_credentials" };
+        }
+        set({ session: { userId: user.id, email: user.email } });
+        return { ok: true as const };
+      },
       logout: () => set({ session: null }),
+      currentUser: () => {
+        const s = get();
+        if (!s.session?.userId) return null;
+        return s.users.find((u) => u.id === s.session!.userId) ?? null;
+      },
+      createUser: async ({ name, email, password, role = "staff", permissions }) => {
+        const actor = get().currentUser();
+        if (!actor || actor.role !== "admin" || !actor.active) {
+          return { ok: false as const, error: "forbidden" };
+        }
+        const cleanEmail = normalizeEmail(email);
+        if (!cleanEmail || !name.trim() || password.length < 4) {
+          return { ok: false as const, error: "invalid" };
+        }
+        if (get().users.some((u) => u.email === cleanEmail)) {
+          return { ok: false as const, error: "email_taken" };
+        }
+        const passwordHash = await hashPassword(password);
+        const finalRole: UserRole = role === "admin" ? "admin" : "staff";
+        const user: AppUser = {
+          id: uid(),
+          name: name.trim(),
+          email: cleanEmail,
+          passwordHash,
+          role: finalRole,
+          permissions:
+            finalRole === "admin"
+              ? [...ALL_PERMISSIONS]
+              : permissions.filter((p) => p !== "users"),
+          active: true,
+          createdAt: new Date().toISOString(),
+        };
+        set((s) => ({ users: [...s.users, user] }));
+        return { ok: true as const, user };
+      },
+      updateUser: async (id, partial) => {
+        const actor = get().currentUser();
+        if (!actor || actor.role !== "admin" || !actor.active) {
+          return { ok: false as const, error: "forbidden" };
+        }
+        const target = get().users.find((u) => u.id === id);
+        if (!target) return { ok: false as const, error: "not_found" };
+
+        let nextEmail = target.email;
+        if (partial.email !== undefined) {
+          nextEmail = normalizeEmail(partial.email);
+          if (
+            get().users.some((u) => u.id !== id && u.email === nextEmail)
+          ) {
+            return { ok: false as const, error: "email_taken" };
+          }
+        }
+
+        let passwordHash = target.passwordHash;
+        if (partial.password) {
+          if (partial.password.length < 4) {
+            return { ok: false as const, error: "invalid" };
+          }
+          passwordHash = await hashPassword(partial.password);
+        }
+
+        const nextRole: UserRole =
+          partial.role !== undefined ? partial.role : target.role;
+        // Prevent deactivating or demoting the last active admin
+        if (
+          target.role === "admin" &&
+          target.active &&
+          (partial.active === false || nextRole !== "admin")
+        ) {
+          const otherAdmins = get().users.filter(
+            (u) => u.id !== id && u.role === "admin" && u.active
+          );
+          if (otherAdmins.length === 0) {
+            return { ok: false as const, error: "last_admin" };
+          }
+        }
+
+        const nextPermissions =
+          nextRole === "admin"
+            ? [...ALL_PERMISSIONS]
+            : (partial.permissions ?? target.permissions).filter(
+                (p) => p !== "users"
+              );
+
+        set((s) => ({
+          users: s.users.map((u) =>
+            u.id === id
+              ? {
+                  ...u,
+                  name: partial.name !== undefined ? partial.name.trim() : u.name,
+                  email: nextEmail,
+                  passwordHash,
+                  role: nextRole,
+                  permissions: nextPermissions,
+                  active:
+                    partial.active !== undefined ? partial.active : u.active,
+                }
+              : u
+          ),
+          session:
+            s.session?.userId === id
+              ? { userId: id, email: nextEmail }
+              : s.session,
+        }));
+        return { ok: true as const };
+      },
+      deactivateUser: (id) => {
+        const actor = get().currentUser();
+        if (!actor || actor.role !== "admin" || !actor.active) {
+          return { ok: false as const, error: "forbidden" };
+        }
+        const target = get().users.find((u) => u.id === id);
+        if (!target) return { ok: false as const, error: "not_found" };
+        if (target.role === "admin" && target.active) {
+          const otherAdmins = get().users.filter(
+            (u) => u.id !== id && u.role === "admin" && u.active
+          );
+          if (otherAdmins.length === 0) {
+            return { ok: false as const, error: "last_admin" };
+          }
+        }
+        set((s) => ({
+          users: s.users.map((u) =>
+            u.id === id ? { ...u, active: false } : u
+          ),
+          session: s.session?.userId === id ? null : s.session,
+        }));
+        return { ok: true as const };
+      },
       settings: defaultSettings,
       updateSettings: (partial) =>
         set((s) => ({ settings: { ...s.settings, ...partial } })),
@@ -548,12 +750,16 @@ export const useStore = create<Store>()(
         if (!Array.isArray(s.messagingSends)) {
           patch.messagingSends = [];
         }
+        if (!Array.isArray(s.users)) {
+          patch.users = [];
+        }
         if (Object.keys(patch).length) set(patch);
       },
     }),
     {
       name: "aiom-crm-demo",
       partialize: (s) => ({
+        users: s.users,
         session: s.session,
         settings: s.settings,
         contacts: s.contacts,
@@ -574,6 +780,18 @@ export const useStore = create<Store>()(
       onRehydrateStorage: () => (state) => {
         if (state && (state.settings.language as string) === "de") {
           state.updateSettings({ language: "es" });
+        }
+        if (state) {
+          if (!Array.isArray(state.users)) {
+            (state as { users: AppUser[] }).users = [];
+          }
+          const sess = state.session as Session | { email: string } | null;
+          if (sess && !("userId" in sess && (sess as Session).userId)) {
+            state.session = null;
+          } else if (state.session?.userId) {
+            const u = state.users.find((x) => x.id === state.session!.userId);
+            if (!u || !u.active) state.session = null;
+          }
         }
         state?.setHydrated(true);
         state?.ensureSeed();
