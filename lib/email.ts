@@ -40,3 +40,12 @@ export async function sendAdminSignupNotification(to: string, name: string, emai
     html: `<div style="font-family:Arial,sans-serif"><h2>New account signup</h2><p><strong>Name:</strong> ${esc(name)}</p><p><strong>Email:</strong> ${esc(email)}</p><p>The account is pending email verification and has no module permissions.</p></div>`,
   });
 }
+
+export async function sendPasswordResetEmail(to: string, name: string, resetUrl: string) {
+  return sendSystemEmail({
+    to,
+    subject: "Reset your enone.app password / Restablece tu contraseña",
+    html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto"><h2>Password reset, ${esc(name)}</h2><p>We received a request to reset your enone.app password. This link expires in 24 hours.</p><p><a href="${esc(resetUrl)}" style="display:inline-block;padding:12px 20px;background:#6366f1;color:white;text-decoration:none;border-radius:6px">Reset password</a></p><p style="color:#64748b;font-size:13px">If you did not request this, you can ignore this email.</p><hr><h2>Restablecer contraseña</h2><p>Recibimos una solicitud para restablecer tu contraseña de enone.app. Este enlace vence en 24 horas.</p><p><a href="${esc(resetUrl)}">Restablecer contraseña</a></p><p style="color:#64748b;font-size:13px">Si no solicitaste esto, puedes ignorar este correo.</p></div>`,
+  });
+}
+
