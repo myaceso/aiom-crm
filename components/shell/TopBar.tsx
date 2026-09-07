@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, ChevronDown, Megaphone, Menu, Phone } from "lucide-react";
+import { Bell, ChevronDown, LogOut, Megaphone, Menu, Phone } from "lucide-react";
 import { t } from "@/lib/i18n";
 import { useStore } from "@/store/useStore";
 
@@ -26,6 +26,7 @@ export default function TopBar() {
   }, []);
 
   function handleLogout() {
+    setMenuOpen(false);
     logout();
     router.push("/login");
   }
@@ -68,10 +69,23 @@ export default function TopBar() {
           1
         </span>
       </button>
+
+      <button
+        type="button"
+        onClick={handleLogout}
+        className="flex min-h-[40px] items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:px-3"
+        title={t(language, "logout")}
+      >
+        <LogOut className="h-4 w-4 shrink-0 text-slate-500" />
+        <span className="hidden sm:inline">{t(language, "logout")}</span>
+      </button>
+
       <div className="relative">
         <button
           onClick={() => setMenuOpen((v) => !v)}
           className="flex min-h-[40px] items-center gap-1.5 rounded-md px-1.5 py-1 hover:bg-slate-50"
+          aria-expanded={menuOpen}
+          aria-haspopup="menu"
         >
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1e3a5f] text-sm font-semibold text-white">
             {initial}
@@ -79,13 +93,17 @@ export default function TopBar() {
           <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
         </button>
         {menuOpen && (
-          <div className="absolute right-0 top-full z-40 mt-1 w-52 rounded-md border border-slate-200 bg-white py-1 shadow-lg">
+          <div
+            role="menu"
+            className="absolute right-0 top-full z-40 mt-1 w-52 rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+          >
             <div className="border-b border-slate-100 px-3 py-2 text-xs text-slate-500">
               <div className="font-medium text-slate-700">{currentUser?.name}</div>
               {session?.email}
             </div>
             {currentUser?.role === "admin" && (
               <button
+                role="menuitem"
                 onClick={() => {
                   setMenuOpen(false);
                   router.push("/dashboard/users");
@@ -96,6 +114,7 @@ export default function TopBar() {
               </button>
             )}
             <button
+              role="menuitem"
               onClick={() => {
                 setMenuOpen(false);
                 router.push("/dashboard/settings");
@@ -105,9 +124,11 @@ export default function TopBar() {
               {t(language, "settings")}
             </button>
             <button
+              role="menuitem"
               onClick={handleLogout}
-              className="block min-h-[40px] w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+              className="flex min-h-[40px] w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50"
             >
+              <LogOut className="h-4 w-4" />
               {t(language, "logout")}
             </button>
           </div>

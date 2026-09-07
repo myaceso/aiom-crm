@@ -252,6 +252,10 @@ const dict = {
     clearAll: "Clear all",
     passwordTooShort: "Password must be at least 4 characters.",
     noUsers: "No users yet",
+    signedInAs: "You're signed in as",
+    goToDashboard: "Go to dashboard",
+    signOutOtherAccount: "Sign out & use another account",
+    signOut: "Sign out",
   },
   es: {
     platformLanguage: "Idioma de la plataforma:",
@@ -504,6 +508,10 @@ const dict = {
     clearAll: "Limpiar",
     passwordTooShort: "La contraseña debe tener al menos 4 caracteres.",
     noUsers: "Aún no hay usuarios",
+    signedInAs: "Has iniciado sesión como",
+    goToDashboard: "Ir al panel",
+    signOutOtherAccount: "Cerrar sesión y usar otra cuenta",
+    signOut: "Cerrar sesión",
   },
 } as const;
 
