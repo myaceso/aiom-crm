@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Pencil, UserPlus, UserX, UserCheck } from "lucide-react";
 import {
   ALL_PERMISSIONS,
@@ -8,7 +8,7 @@ import {
   isAdmin,
 } from "@/lib/auth";
 import { t, type DictKey } from "@/lib/i18n";
-import type { AppUser, PermissionKey, UserRole } from "@/lib/types";
+import type { SafeUser, PermissionKey, UserRole } from "@/lib/types";
 import { useStore } from "@/store/useStore";
 import clsx from "clsx";
 
@@ -56,6 +56,11 @@ export default function UsersPage() {
   const updateUser = useStore((s) => s.updateUser);
   const deactivateUser = useStore((s) => s.deactivateUser);
   const showToast = useStore((s) => s.showToast);
+  const fetchUsers = useStore((s) => s.fetchUsers);
+
+  useEffect(() => {
+    void fetchUsers();
+  }, [fetchUsers]);
 
   const me = users.find((u) => u.id === session?.userId) ?? null;
   const admin = isAdmin(me);
@@ -90,7 +95,7 @@ export default function UsersPage() {
     setOpen(true);
   }
 
-  function openEdit(u: AppUser) {
+  function openEdit(u: SafeUser) {
     setEditingId(u.id);
     setForm({
       name: u.name,
@@ -170,9 +175,9 @@ export default function UsersPage() {
     }
   }
 
-  async function toggleActive(u: AppUser) {
+  async function toggleActive(u: SafeUser) {
     if (u.active) {
-      const res = deactivateUser(u.id);
+      const res = await deactivateUser(u.id);
       if (!res.ok) {
         showToast(
           res.error === "last_admin"

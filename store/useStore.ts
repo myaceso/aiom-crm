@@ -25,17 +25,11 @@ import type {
   WhatsAppIntegration,
   TelegramIntegration,
   MessagingSend,
-  AppUser,
+  SafeUser,
   Session,
   PermissionKey,
   UserRole,
 } from "@/lib/types";
-import {
-  hashPassword,
-  verifyPassword,
-  normalizeEmail,
-  ALL_PERMISSIONS,
-} from "@/lib/auth";
 import {
   createSeedContacts,
   createSeedOpportunities,
@@ -60,8 +54,12 @@ type Toast = { id: string; message: string } | null;
 type Store = {
   hydrated: boolean;
   setHydrated: (v: boolean) => void;
-  users: AppUser[];
+  authReady: boolean;
+  needsBootstrap: boolean;
+  users: SafeUser[];
   session: Session | null;
+  refreshAuth: () => Promise<void>;
+  fetchUsers: () => Promise<void>;
   bootstrapAdmin: (data: {
     name: string;
     email: string;
@@ -71,22 +69,24 @@ type Store = {
     email: string,
     password: string
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
-  logout: () => void;
-  currentUser: () => AppUser | null;
+  logout: () => Promise<void>;
+  currentUser: () => SafeUser | null;
   createUser: (data: {
     name: string;
     email: string;
     password: string;
     role?: UserRole;
     permissions: PermissionKey[];
-  }) => Promise<{ ok: true; user: AppUser } | { ok: false; error: string }>;
+  }) => Promise<{ ok: true; user: SafeUser } | { ok: false; error: string }>;
   updateUser: (
     id: string,
     partial: Partial<
-      Pick<AppUser, "name" | "email" | "role" | "permissions" | "active">
+      Pick<SafeUser, "name" | "email" | "role" | "permissions" | "active">
     > & { password?: string }
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
-  deactivateUser: (id: string) => { ok: true } | { ok: false; error: string };
+  deactivateUser: (
+    id: string
+  ) => Promise<{ ok: true } | { ok: false; error: string }>;
   settings: Settings;
   updateSettings: (partial: Partial<Settings>) => void;
   setLanguage: (lang: Lang) => void;
@@ -179,176 +179,204 @@ export const useStore = create<Store>()(
     (set, get) => ({
       hydrated: false,
       setHydrated: (v) => set({ hydrated: v }),
+      authReady: false,
+      needsBootstrap: false,
       users: [],
       session: null,
+      refreshAuth: async () => {
+        try {
+          const res = await fetch("/api/auth/me", {
+            credentials: "include",
+            cache: "no-store",
+          });
+          const data = await res.json();
+          const user = (data?.user as SafeUser | null) || null;
+          set({
+            authReady: true,
+            needsBootstrap: !!data?.needsBootstrap,
+            session: user
+              ? { userId: user.id, email: user.email }
+              : null,
+          });
+          if (user) {
+            set((s) => ({
+              users: [
+                user,
+                ...s.users.filter((u) => u.id !== user.id),
+              ],
+            }));
+            if (user.role === "admin") void get().fetchUsers();
+          }
+        } catch {
+          set({ authReady: true, session: null, needsBootstrap: false });
+        }
+      },
+      fetchUsers: async () => {
+        try {
+          const res = await fetch("/api/auth/users", {
+            credentials: "include",
+            cache: "no-store",
+          });
+          if (!res.ok) return;
+          const data = await res.json();
+          if (Array.isArray(data?.users)) {
+            set({ users: data.users as SafeUser[] });
+          }
+        } catch {
+          /* ignore */
+        }
+      },
       bootstrapAdmin: async ({ name, email, password }) => {
-        const s = get();
-        if (s.users.length > 0) {
-          return { ok: false as const, error: "users_exist" };
+        try {
+          const res = await fetch("/api/auth/bootstrap", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, email, password }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            return {
+              ok: false as const,
+              error: (data?.error as string) || "invalid",
+            };
+          }
+          const user = data.user as SafeUser;
+          set({
+            needsBootstrap: false,
+            session: { userId: user.id, email: user.email },
+            users: [user],
+            authReady: true,
+          });
+          return { ok: true as const };
+        } catch {
+          return { ok: false as const, error: "server_error" };
         }
-        const cleanEmail = normalizeEmail(email);
-        if (!cleanEmail || !name.trim() || password.length < 4) {
-          return { ok: false as const, error: "invalid" };
-        }
-        const passwordHash = await hashPassword(password);
-        const user: AppUser = {
-          id: uid(),
-          name: name.trim(),
-          email: cleanEmail,
-          passwordHash,
-          role: "admin",
-          permissions: [...ALL_PERMISSIONS],
-          active: true,
-          createdAt: new Date().toISOString(),
-        };
-        set({
-          users: [user],
-          session: { userId: user.id, email: user.email },
-        });
-        return { ok: true as const };
       },
       login: async (email, password) => {
-        const cleanEmail = normalizeEmail(email);
-        const user = get().users.find((u) => u.email === cleanEmail);
-        if (!user || !user.active) {
-          return { ok: false as const, error: "invalid_credentials" };
+        try {
+          const res = await fetch("/api/auth/login", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            return {
+              ok: false as const,
+              error: (data?.error as string) || "invalid_credentials",
+            };
+          }
+          const user = data.user as SafeUser;
+          set({
+            session: { userId: user.id, email: user.email },
+            users: [user],
+            authReady: true,
+            needsBootstrap: false,
+          });
+          if (user.role === "admin") void get().fetchUsers();
+          return { ok: true as const };
+        } catch {
+          return { ok: false as const, error: "server_error" };
         }
-        const valid = await verifyPassword(password, user.passwordHash);
-        if (!valid) {
-          return { ok: false as const, error: "invalid_credentials" };
-        }
-        set({ session: { userId: user.id, email: user.email } });
-        return { ok: true as const };
       },
-      logout: () => set({ session: null }),
+      logout: async () => {
+        try {
+          await fetch("/api/auth/logout", {
+            method: "POST",
+            credentials: "include",
+          });
+        } catch {
+          /* ignore */
+        }
+        set({ session: null });
+      },
       currentUser: () => {
         const s = get();
         if (!s.session?.userId) return null;
         return s.users.find((u) => u.id === s.session!.userId) ?? null;
       },
-      createUser: async ({ name, email, password, role = "staff", permissions }) => {
-        const actor = get().currentUser();
-        if (!actor || actor.role !== "admin" || !actor.active) {
-          return { ok: false as const, error: "forbidden" };
+      createUser: async ({
+        name,
+        email,
+        password,
+        role = "staff",
+        permissions,
+      }) => {
+        try {
+          const res = await fetch("/api/auth/users", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, email, password, role, permissions }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            return {
+              ok: false as const,
+              error: (data?.error as string) || "forbidden",
+            };
+          }
+          const user = data.user as SafeUser;
+          set((s) => ({
+            users: [...s.users.filter((u) => u.id !== user.id), user],
+          }));
+          return { ok: true as const, user };
+        } catch {
+          return { ok: false as const, error: "server_error" };
         }
-        const cleanEmail = normalizeEmail(email);
-        if (!cleanEmail || !name.trim() || password.length < 4) {
-          return { ok: false as const, error: "invalid" };
-        }
-        if (get().users.some((u) => u.email === cleanEmail)) {
-          return { ok: false as const, error: "email_taken" };
-        }
-        const passwordHash = await hashPassword(password);
-        const finalRole: UserRole = role === "admin" ? "admin" : "staff";
-        const user: AppUser = {
-          id: uid(),
-          name: name.trim(),
-          email: cleanEmail,
-          passwordHash,
-          role: finalRole,
-          permissions:
-            finalRole === "admin"
-              ? [...ALL_PERMISSIONS]
-              : permissions.filter((p) => p !== "users"),
-          active: true,
-          createdAt: new Date().toISOString(),
-        };
-        set((s) => ({ users: [...s.users, user] }));
-        return { ok: true as const, user };
       },
       updateUser: async (id, partial) => {
-        const actor = get().currentUser();
-        if (!actor || actor.role !== "admin" || !actor.active) {
-          return { ok: false as const, error: "forbidden" };
-        }
-        const target = get().users.find((u) => u.id === id);
-        if (!target) return { ok: false as const, error: "not_found" };
-
-        let nextEmail = target.email;
-        if (partial.email !== undefined) {
-          nextEmail = normalizeEmail(partial.email);
-          if (
-            get().users.some((u) => u.id !== id && u.email === nextEmail)
-          ) {
-            return { ok: false as const, error: "email_taken" };
+        try {
+          const res = await fetch(`/api/auth/users/${id}`, {
+            method: "PATCH",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(partial),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            return {
+              ok: false as const,
+              error: (data?.error as string) || "forbidden",
+            };
           }
+          const user = data.user as SafeUser;
+          set((s) => ({
+            users: s.users.map((u) => (u.id === id ? user : u)),
+            session:
+              s.session?.userId === id
+                ? { userId: id, email: user.email }
+                : s.session,
+          }));
+          return { ok: true as const };
+        } catch {
+          return { ok: false as const, error: "server_error" };
         }
-
-        let passwordHash = target.passwordHash;
-        if (partial.password) {
-          if (partial.password.length < 4) {
-            return { ok: false as const, error: "invalid" };
-          }
-          passwordHash = await hashPassword(partial.password);
-        }
-
-        const nextRole: UserRole =
-          partial.role !== undefined ? partial.role : target.role;
-        // Prevent deactivating or demoting the last active admin
-        if (
-          target.role === "admin" &&
-          target.active &&
-          (partial.active === false || nextRole !== "admin")
-        ) {
-          const otherAdmins = get().users.filter(
-            (u) => u.id !== id && u.role === "admin" && u.active
-          );
-          if (otherAdmins.length === 0) {
-            return { ok: false as const, error: "last_admin" };
-          }
-        }
-
-        const nextPermissions =
-          nextRole === "admin"
-            ? [...ALL_PERMISSIONS]
-            : (partial.permissions ?? target.permissions).filter(
-                (p) => p !== "users"
-              );
-
-        set((s) => ({
-          users: s.users.map((u) =>
-            u.id === id
-              ? {
-                  ...u,
-                  name: partial.name !== undefined ? partial.name.trim() : u.name,
-                  email: nextEmail,
-                  passwordHash,
-                  role: nextRole,
-                  permissions: nextPermissions,
-                  active:
-                    partial.active !== undefined ? partial.active : u.active,
-                }
-              : u
-          ),
-          session:
-            s.session?.userId === id
-              ? { userId: id, email: nextEmail }
-              : s.session,
-        }));
-        return { ok: true as const };
       },
-      deactivateUser: (id) => {
-        const actor = get().currentUser();
-        if (!actor || actor.role !== "admin" || !actor.active) {
-          return { ok: false as const, error: "forbidden" };
-        }
-        const target = get().users.find((u) => u.id === id);
-        if (!target) return { ok: false as const, error: "not_found" };
-        if (target.role === "admin" && target.active) {
-          const otherAdmins = get().users.filter(
-            (u) => u.id !== id && u.role === "admin" && u.active
-          );
-          if (otherAdmins.length === 0) {
-            return { ok: false as const, error: "last_admin" };
+      deactivateUser: async (id) => {
+        try {
+          const res = await fetch(`/api/auth/users/${id}`, {
+            method: "DELETE",
+            credentials: "include",
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            return {
+              ok: false as const,
+              error: (data?.error as string) || "forbidden",
+            };
           }
+          const user = data.user as SafeUser;
+          set((s) => ({
+            users: s.users.map((u) => (u.id === id ? user : u)),
+            session: s.session?.userId === id ? null : s.session,
+          }));
+          return { ok: true as const };
+        } catch {
+          return { ok: false as const, error: "server_error" };
         }
-        set((s) => ({
-          users: s.users.map((u) =>
-            u.id === id ? { ...u, active: false } : u
-          ),
-          session: s.session?.userId === id ? null : s.session,
-        }));
-        return { ok: true as const };
       },
       settings: defaultSettings,
       updateSettings: (partial) =>
@@ -388,7 +416,7 @@ export const useStore = create<Store>()(
               id: uid(),
               body,
               createdAt: new Date().toISOString(),
-              author: "Demo User",
+              author: get().currentUser()?.name || "User",
             };
             return {
               ...c,
@@ -757,10 +785,8 @@ export const useStore = create<Store>()(
       },
     }),
     {
-      name: "aiom-crm-demo",
+      name: "enone-crm",
       partialize: (s) => ({
-        users: s.users,
-        session: s.session,
         settings: s.settings,
         contacts: s.contacts,
         opportunities: s.opportunities,
@@ -782,19 +808,14 @@ export const useStore = create<Store>()(
           state.updateSettings({ language: "es" });
         }
         if (state) {
-          if (!Array.isArray(state.users)) {
-            (state as { users: AppUser[] }).users = [];
-          }
-          const sess = state.session as Session | { email: string } | null;
-          if (sess && !("userId" in sess && (sess as Session).userId)) {
-            state.session = null;
-          } else if (state.session?.userId) {
-            const u = state.users.find((x) => x.id === state.session!.userId);
-            if (!u || !u.active) state.session = null;
-          }
+          state.users = [];
+          state.session = null;
+          state.needsBootstrap = false;
+          state.authReady = false;
         }
         state?.setHydrated(true);
         state?.ensureSeed();
+        void state?.refreshAuth();
       },
     }
   )

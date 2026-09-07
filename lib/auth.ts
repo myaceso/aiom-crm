@@ -1,4 +1,4 @@
-import type { PermissionKey, AppUser, UserRole } from "./types";
+import type { PermissionKey, SafeUser, UserRole } from "./types";
 
 export const ALL_PERMISSIONS: PermissionKey[] = [
   "contacts",
@@ -119,12 +119,12 @@ export async function verifyPassword(
   return diff === 0;
 }
 
-export function isAdmin(user: AppUser | null | undefined): boolean {
+export function isAdmin(user: SafeUser | null | undefined): boolean {
   return !!user && user.role === "admin" && user.active;
 }
 
 export function hasPermission(
-  user: AppUser | null | undefined,
+  user: SafeUser | null | undefined,
   permission: PermissionKey
 ): boolean {
   if (!user || !user.active) return false;
@@ -133,7 +133,7 @@ export function hasPermission(
 }
 
 export function canAccessPath(
-  user: AppUser | null | undefined,
+  user: SafeUser | null | undefined,
   pathname: string
 ): boolean {
   if (!user || !user.active) return false;

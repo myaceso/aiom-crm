@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
@@ -14,17 +14,22 @@ export default function LoginPage() {
   const login = useStore((s) => s.login);
   const logout = useStore((s) => s.logout);
   const bootstrapAdmin = useStore((s) => s.bootstrapAdmin);
+  const refreshAuth = useStore((s) => s.refreshAuth);
   const session = useStore((s) => s.session);
   const hydrated = useStore((s) => s.hydrated);
-  const users = useStore((s) => s.users);
+  const authReady = useStore((s) => s.authReady);
+  const needsBootstrap = useStore((s) => s.needsBootstrap);
 
-  const needsBootstrap = hydrated && users.length === 0;
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (hydrated && !authReady) void refreshAuth();
+  }, [hydrated, authReady, refreshAuth]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -73,16 +78,29 @@ export default function LoginPage() {
     }
   }
 
-  function handleSignOutOther() {
-    logout();
+  async function handleSignOutOther() {
+    await logout();
     setEmail("");
     setPassword("");
     setName("");
     setError("");
+    await refreshAuth();
   }
 
-  const isBootstrap = needsBootstrap;
-  const showSignedInPanel = hydrated && !!session;
+  const ready = hydrated && authReady;
+  const isBootstrap = ready && needsBootstrap;
+  const showSignedInPanel = ready && !!session && !needsBootstrap;
+
+  if (!ready) {
+    return (
+      <div className="flex min-h-screen flex-col bg-[#f8fafc]">
+        <AuthHeader />
+        <main className="flex flex-1 items-center justify-center px-4 py-8">
+          <div className="boot-spinner" />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-[#f8fafc]">
@@ -107,7 +125,7 @@ export default function LoginPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={handleSignOutOther}
+                  onClick={() => void handleSignOutOther()}
                   className="w-full rounded-md border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
                   {t(language, "signOutOtherAccount")}
@@ -205,7 +223,7 @@ export default function LoginPage() {
                     : t(language, "signIn")}
                 </button>
               </form>
-              {needsBootstrap && (
+              {isBootstrap && (
                 <p className="mt-4 text-center text-xs text-slate-500">
                   {t(language, "noAccountYet")}
                 </p>

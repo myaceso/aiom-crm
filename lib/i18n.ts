@@ -139,7 +139,7 @@ const dict = {
     connectRequired: "Connect at least one network in Integrations",
     connectSmsRequired: "Connect SMS in Integrations",
     connectEmailRequired: "Connect Email in Integrations",
-    securityNote: "Demo note: credentials are stored in this browser (localStorage). For production, use Vercel environment variables.",
+    securityNote: "Integration keys on this page are kept in your browser for now. Account sign-in uses secure server sessions.",
     publishSuccess: "Published successfully",
     publishPartial: "Published to some networks",
     publishFailed: "Publish failed",
@@ -256,6 +256,7 @@ const dict = {
     goToDashboard: "Go to dashboard",
     signOutOtherAccount: "Sign out & use another account",
     signOut: "Sign out",
+    account: "Account",
   },
   es: {
     platformLanguage: "Idioma de la plataforma:",
@@ -395,7 +396,7 @@ const dict = {
     connectRequired: "Conecta al menos una red en Integraciones",
     connectSmsRequired: "Conecta SMS en Integraciones",
     connectEmailRequired: "Conecta Email en Integraciones",
-    securityNote: "Nota demo: las credenciales se guardan en este navegador (localStorage). En producción usa variables de entorno de Vercel.",
+    securityNote: "Las claves de integraciones en esta página se guardan en el navegador por ahora. El inicio de sesión usa sesiones seguras en el servidor.",
     publishSuccess: "Publicado correctamente",
     publishPartial: "Publicado en algunas redes",
     publishFailed: "Error al publicar",
@@ -512,6 +513,7 @@ const dict = {
     goToDashboard: "Ir al panel",
     signOutOtherAccount: "Cerrar sesión y usar otra cuenta",
     signOut: "Cerrar sesión",
+    account: "Cuenta",
   },
 } as const;
 

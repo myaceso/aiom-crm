@@ -15,21 +15,34 @@ export default function DashboardLayout({
   const router = useRouter();
   const session = useStore((s) => s.session);
   const hydrated = useStore((s) => s.hydrated);
+  const authReady = useStore((s) => s.authReady);
+  const refreshAuth = useStore((s) => s.refreshAuth);
   const ensureSeed = useStore((s) => s.ensureSeed);
   const mobileNavOpen = useStore((s) => s.mobileNavOpen);
   const setMobileNavOpen = useStore((s) => s.setMobileNavOpen);
-
   const users = useStore((s) => s.users);
   const logout = useStore((s) => s.logout);
   const currentUser = users.find((u) => u.id === session?.userId) ?? null;
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (hydrated && !authReady) void refreshAuth();
+  }, [hydrated, authReady, refreshAuth]);
+
+  useEffect(() => {
+    if (!hydrated || !authReady) return;
     if (!session || !currentUser || !currentUser.active) {
-      if (session && (!currentUser || !currentUser.active)) logout();
+      if (session && (!currentUser || !currentUser.active)) void logout();
       router.replace("/login");
     } else ensureSeed();
-  }, [hydrated, session, currentUser, router, ensureSeed, logout]);
+  }, [
+    hydrated,
+    authReady,
+    session,
+    currentUser,
+    router,
+    ensureSeed,
+    logout,
+  ]);
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
@@ -40,7 +53,13 @@ export default function DashboardLayout({
     return () => mq.removeEventListener("change", onChange);
   }, [setMobileNavOpen]);
 
-  if (!hydrated || !session || !currentUser || !currentUser.active) {
+  if (
+    !hydrated ||
+    !authReady ||
+    !session ||
+    !currentUser ||
+    !currentUser.active
+  ) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#f2f7fa]">
         <div className="boot-spinner" />

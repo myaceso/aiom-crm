@@ -261,3 +261,6 @@ export type Session = {
   userId: string;
   email: string;
 };
+
+/** User shape returned to the client (never includes passwordHash). */
+export type SafeUser = Omit<AppUser, "passwordHash">;

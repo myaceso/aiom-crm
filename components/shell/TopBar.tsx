@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, ChevronDown, LogOut, Megaphone, Menu, Phone } from "lucide-react";
+import { Bell, ChevronDown, LogIn, LogOut, Megaphone, Menu, Phone } from "lucide-react";
 import { t } from "@/lib/i18n";
 import { useStore } from "@/store/useStore";
 
@@ -25,14 +26,14 @@ export default function TopBar() {
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
-  function handleLogout() {
+  async function handleLogout() {
     setMenuOpen(false);
-    logout();
+    await logout();
     router.push("/login");
   }
 
   const displayName = currentUser?.name || session?.email || "";
-  const initial = (displayName?.[0] || "D").toUpperCase();
+  const initial = (displayName?.[0] || "U").toUpperCase();
 
   return (
     <header
@@ -70,9 +71,18 @@ export default function TopBar() {
         </span>
       </button>
 
+      <Link
+        href="/login"
+        className="flex min-h-[40px] items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:px-3"
+        title={t(language, "signIn")}
+      >
+        <LogIn className="h-4 w-4 shrink-0 text-slate-500" />
+        <span className="hidden sm:inline">{t(language, "account")}</span>
+      </Link>
+
       <button
         type="button"
-        onClick={handleLogout}
+        onClick={() => void handleLogout()}
         className="flex min-h-[40px] items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:px-3"
         title={t(language, "logout")}
       >
@@ -101,6 +111,16 @@ export default function TopBar() {
               <div className="font-medium text-slate-700">{currentUser?.name}</div>
               {session?.email}
             </div>
+            <button
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false);
+                router.push("/login");
+              }}
+              className="block min-h-[40px] w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+            >
+              {t(language, "account")}
+            </button>
             {currentUser?.role === "admin" && (
               <button
                 role="menuitem"
@@ -125,7 +145,7 @@ export default function TopBar() {
             </button>
             <button
               role="menuitem"
-              onClick={handleLogout}
+              onClick={() => void handleLogout()}
               className="flex min-h-[40px] w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50"
             >
               <LogOut className="h-4 w-4" />
