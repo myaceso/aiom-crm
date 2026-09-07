@@ -26,6 +26,8 @@ import {
   Mail,
   Plug,
   X,
+  Phone,
+  Send,
 } from "lucide-react";
 import Logo from "@/components/Logo";
 import { t, type DictKey } from "@/lib/i18n";
@@ -48,6 +50,8 @@ const secondary: NavItem[] = [
   { href: "/dashboard/marketing", key: "marketing", icon: Share2 },
   { href: "/dashboard/sms-marketing", key: "smsMarketing", icon: MessageCircle },
   { href: "/dashboard/email-marketing", key: "emailMarketing", icon: Mail },
+  { href: "/dashboard/whatsapp", key: "whatsapp", icon: Phone },
+  { href: "/dashboard/telegram", key: "telegram", icon: Send },
   { href: "/dashboard/integrations", key: "integrations", icon: Plug },
   { href: "/dashboard/automation", key: "automation", icon: Play },
   { href: "/dashboard/sites", key: "sites", icon: Globe },

@@ -22,6 +22,9 @@ import type {
   Integrations,
   SmsIntegration,
   EmailIntegration,
+  WhatsAppIntegration,
+  TelegramIntegration,
+  MessagingSend,
 } from "@/lib/types";
 import {
   createSeedContacts,
@@ -119,6 +122,12 @@ type Store = {
   disconnectSms: () => void;
   connectEmail: (data: Omit<EmailIntegration, "connected">) => void;
   disconnectEmail: () => void;
+  connectWhatsApp: (data: Omit<WhatsAppIntegration, "connected">) => void;
+  disconnectWhatsApp: () => void;
+  connectTelegram: (data: Omit<TelegramIntegration, "connected">) => void;
+  disconnectTelegram: () => void;
+  messagingSends: MessagingSend[];
+  addMessagingSend: (s: Omit<MessagingSend, "id" | "createdAt">) => void;
   toast: Toast;
   showToast: (message: string) => void;
   clearToast: () => void;
@@ -405,6 +414,55 @@ export const useStore = create<Store>()(
             email: { ...defaultIntegrations.email },
           },
         })),
+      connectWhatsApp: (data) =>
+        set((s) => ({
+          integrations: {
+            ...s.integrations,
+            whatsapp: {
+              connected: true,
+              phoneNumberId: data.phoneNumberId.trim(),
+              accessToken: data.accessToken.trim(),
+              wabaId: (data.wabaId || "").trim(),
+            },
+          },
+        })),
+      disconnectWhatsApp: () =>
+        set((s) => ({
+          integrations: {
+            ...s.integrations,
+            whatsapp: { ...defaultIntegrations.whatsapp },
+          },
+        })),
+      connectTelegram: (data) =>
+        set((s) => ({
+          integrations: {
+            ...s.integrations,
+            telegram: {
+              connected: true,
+              botToken: data.botToken.trim(),
+              defaultChatId: (data.defaultChatId || "").trim(),
+            },
+          },
+        })),
+      disconnectTelegram: () =>
+        set((s) => ({
+          integrations: {
+            ...s.integrations,
+            telegram: { ...defaultIntegrations.telegram },
+          },
+        })),
+      messagingSends: [],
+      addMessagingSend: (entry) =>
+        set((s) => ({
+          messagingSends: [
+            {
+              ...entry,
+              id: uid(),
+              createdAt: new Date().toISOString(),
+            },
+            ...(s.messagingSends || []),
+          ].slice(0, 50),
+        })),
       toast: null,
       showToast: (message) => {
         const id = uid();
@@ -465,14 +523,30 @@ export const useStore = create<Store>()(
         if (s.emailCampaigns.length === 0) {
           patch.emailCampaigns = createSeedEmailCampaigns();
         }
-        if (!s.integrations?.sms || !s.integrations?.email) {
+        if (
+          !s.integrations?.sms ||
+          !s.integrations?.email ||
+          !s.integrations?.whatsapp ||
+          !s.integrations?.telegram
+        ) {
           patch.integrations = {
             sms: { ...defaultIntegrations.sms, ...(s.integrations?.sms || {}) },
             email: {
               ...defaultIntegrations.email,
               ...(s.integrations?.email || {}),
             },
+            whatsapp: {
+              ...defaultIntegrations.whatsapp,
+              ...(s.integrations?.whatsapp || {}),
+            },
+            telegram: {
+              ...defaultIntegrations.telegram,
+              ...(s.integrations?.telegram || {}),
+            },
           };
+        }
+        if (!Array.isArray(s.messagingSends)) {
+          patch.messagingSends = [];
         }
         if (Object.keys(patch).length) set(patch);
       },
@@ -494,6 +568,7 @@ export const useStore = create<Store>()(
         emailCampaigns: s.emailCampaigns,
         emailTemplates: s.emailTemplates,
         integrations: s.integrations,
+        messagingSends: s.messagingSends,
         sidebarCollapsed: s.sidebarCollapsed,
       }),
       onRehydrateStorage: () => (state) => {

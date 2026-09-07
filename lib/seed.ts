@@ -296,6 +296,17 @@ export const defaultIntegrations: Integrations = {
     fromEmail: "",
     fromName: "",
   },
+  whatsapp: {
+    connected: false,
+    phoneNumberId: "",
+    accessToken: "",
+    wabaId: "",
+  },
+  telegram: {
+    connected: false,
+    botToken: "",
+    defaultChatId: "",
+  },
 };
 
 export function createSeedSocialPosts(): SocialPost[] {

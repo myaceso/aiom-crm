@@ -13,6 +13,8 @@ import {
   ExternalLink,
   Plug,
   ShieldAlert,
+  Phone,
+  Send,
 } from "lucide-react";
 import { t } from "@/lib/i18n";
 import type { EmailProvider, SocialNetworkId } from "@/lib/types";
@@ -52,6 +54,10 @@ export default function IntegrationsPage() {
   const disconnectSms = useStore((s) => s.disconnectSms);
   const connectEmail = useStore((s) => s.connectEmail);
   const disconnectEmail = useStore((s) => s.disconnectEmail);
+  const connectWhatsApp = useStore((s) => s.connectWhatsApp);
+  const disconnectWhatsApp = useStore((s) => s.disconnectWhatsApp);
+  const connectTelegram = useStore((s) => s.connectTelegram);
+  const disconnectTelegram = useStore((s) => s.disconnectTelegram);
   const showToast = useStore((s) => s.showToast);
 
   const [smsForm, setSmsForm] = useState({
@@ -65,7 +71,16 @@ export default function IntegrationsPage() {
     fromEmail: integrations.email.fromEmail,
     fromName: integrations.email.fromName,
   });
-  const [testing, setTesting] = useState<"sms" | "email" | null>(null);
+  const [waForm, setWaForm] = useState({
+    phoneNumberId: integrations.whatsapp?.phoneNumberId || "",
+    accessToken: integrations.whatsapp?.accessToken || "",
+    wabaId: integrations.whatsapp?.wabaId || "",
+  });
+  const [tgForm, setTgForm] = useState({
+    botToken: integrations.telegram?.botToken || "",
+    defaultChatId: integrations.telegram?.defaultChatId || "",
+  });
+  const [testing, setTesting] = useState<"sms" | "email" | "whatsapp" | "telegram" | null>(null);
 
   const connectedCount = useMemo(
     () => connections.filter((c) => c.connected).length,
@@ -207,6 +222,79 @@ export default function IntegrationsPage() {
     connectEmail(emailForm);
     showToast(
       language === "es" ? "Email conectado" : "Email connected"
+    );
+  }
+
+
+  async function testWhatsApp() {
+    if (!waForm.phoneNumberId.trim() || !waForm.accessToken.trim()) {
+      showToast(t(language, "requiredFields"));
+      return;
+    }
+    setTesting("whatsapp");
+    try {
+      const res = await fetch("/api/whatsapp/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(waForm),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || t(language, "testFail"));
+        return;
+      }
+      showToast(data.message || t(language, "testOk"));
+    } catch {
+      showToast(t(language, "testFail"));
+    } finally {
+      setTesting(null);
+    }
+  }
+
+  function onConnectWhatsApp() {
+    if (!waForm.phoneNumberId.trim() || !waForm.accessToken.trim()) {
+      showToast(t(language, "requiredFields"));
+      return;
+    }
+    connectWhatsApp(waForm);
+    showToast(
+      language === "es" ? "WhatsApp conectado" : "WhatsApp connected"
+    );
+  }
+
+  async function testTelegram() {
+    if (!tgForm.botToken.trim()) {
+      showToast(t(language, "requiredFields"));
+      return;
+    }
+    setTesting("telegram");
+    try {
+      const res = await fetch("/api/telegram/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(tgForm),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || t(language, "testFail"));
+        return;
+      }
+      showToast(data.message || t(language, "testOk"));
+    } catch {
+      showToast(t(language, "testFail"));
+    } finally {
+      setTesting(null);
+    }
+  }
+
+  function onConnectTelegram() {
+    if (!tgForm.botToken.trim()) {
+      showToast(t(language, "requiredFields"));
+      return;
+    }
+    connectTelegram(tgForm);
+    showToast(
+      language === "es" ? "Telegram conectado" : "Telegram connected"
     );
   }
 
@@ -605,6 +693,215 @@ export default function IntegrationsPage() {
               <button
                 type="button"
                 onClick={onConnectEmail}
+                className="brand-bg rounded-md px-3 py-2 text-sm font-semibold text-white"
+              >
+                {t(language, "connect")}
+              </button>
+            </>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Phone className="h-4 w-4 text-slate-500" />
+            <h2 className="text-sm font-semibold text-slate-700">
+              {t(language, "whatsappSettings")}
+            </h2>
+            {integrations.whatsapp?.connected && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">
+                <CheckCircle2 className="h-3 w-3" />
+                {t(language, "connectedBadge")}
+              </span>
+            )}
+          </div>
+          <Link
+            href="/dashboard/whatsapp"
+            className="text-xs font-medium text-[var(--brand)] hover:underline"
+          >
+            {t(language, "whatsapp")} →
+          </Link>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              {t(language, "phoneNumberId")}
+            </label>
+            <input
+              value={waForm.phoneNumberId}
+              disabled={integrations.whatsapp?.connected}
+              onChange={(e) =>
+                setWaForm((f) => ({ ...f, phoneNumberId: e.target.value }))
+              }
+              placeholder="123456789012345"
+              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--brand)]/30 disabled:bg-slate-50"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              {t(language, "wabaId")}
+            </label>
+            <input
+              value={waForm.wabaId}
+              disabled={integrations.whatsapp?.connected}
+              onChange={(e) =>
+                setWaForm((f) => ({ ...f, wabaId: e.target.value }))
+              }
+              placeholder="optional"
+              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--brand)]/30 disabled:bg-slate-50"
+            />
+            <p className="mt-1 text-[11px] leading-snug text-slate-400">
+              {t(language, "wabaIdHelp")}
+            </p>
+          </div>
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              {t(language, "whatsappAccessToken")}
+            </label>
+            <input
+              type="password"
+              value={waForm.accessToken}
+              disabled={integrations.whatsapp?.connected}
+              onChange={(e) =>
+                setWaForm((f) => ({ ...f, accessToken: e.target.value }))
+              }
+              autoComplete="off"
+              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--brand)]/30 disabled:bg-slate-50"
+            />
+            <p className="mt-1 text-[11px] leading-snug text-slate-400">
+              {t(language, "whatsappAccessTokenHelp")}
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap justify-end gap-2">
+          {integrations.whatsapp?.connected ? (
+            <button
+              type="button"
+              onClick={() => {
+                disconnectWhatsApp();
+                setWaForm({ phoneNumberId: "", accessToken: "", wabaId: "" });
+                showToast(
+                  language === "es"
+                    ? "WhatsApp desconectado"
+                    : "WhatsApp disconnected"
+                );
+              }}
+              className="rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600"
+            >
+              {t(language, "disconnect")}
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                disabled={testing === "whatsapp"}
+                onClick={testWhatsApp}
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 disabled:opacity-50"
+              >
+                {t(language, "testConnection")}
+              </button>
+              <button
+                type="button"
+                onClick={onConnectWhatsApp}
+                className="brand-bg rounded-md px-3 py-2 text-sm font-semibold text-white"
+              >
+                {t(language, "connect")}
+              </button>
+            </>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Send className="h-4 w-4 text-slate-500" />
+            <h2 className="text-sm font-semibold text-slate-700">
+              {t(language, "telegramSettings")}
+            </h2>
+            {integrations.telegram?.connected && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">
+                <CheckCircle2 className="h-3 w-3" />
+                {t(language, "connectedBadge")}
+              </span>
+            )}
+          </div>
+          <Link
+            href="/dashboard/telegram"
+            className="text-xs font-medium text-[var(--brand)] hover:underline"
+          >
+            {t(language, "telegram")} →
+          </Link>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              {t(language, "botToken")}
+            </label>
+            <input
+              type="password"
+              value={tgForm.botToken}
+              disabled={integrations.telegram?.connected}
+              onChange={(e) =>
+                setTgForm((f) => ({ ...f, botToken: e.target.value }))
+              }
+              autoComplete="off"
+              placeholder="123456:ABC-DEF..."
+              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--brand)]/30 disabled:bg-slate-50"
+            />
+            <p className="mt-1 text-[11px] leading-snug text-slate-400">
+              {t(language, "botTokenHelp")}
+            </p>
+          </div>
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              {t(language, "defaultChatId")}
+            </label>
+            <input
+              value={tgForm.defaultChatId}
+              disabled={integrations.telegram?.connected}
+              onChange={(e) =>
+                setTgForm((f) => ({ ...f, defaultChatId: e.target.value }))
+              }
+              placeholder="@mychannel or 123456789"
+              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--brand)]/30 disabled:bg-slate-50"
+            />
+            <p className="mt-1 text-[11px] leading-snug text-slate-400">
+              {t(language, "defaultChatIdHelp")}
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap justify-end gap-2">
+          {integrations.telegram?.connected ? (
+            <button
+              type="button"
+              onClick={() => {
+                disconnectTelegram();
+                setTgForm({ botToken: "", defaultChatId: "" });
+                showToast(
+                  language === "es"
+                    ? "Telegram desconectado"
+                    : "Telegram disconnected"
+                );
+              }}
+              className="rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600"
+            >
+              {t(language, "disconnect")}
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                disabled={testing === "telegram"}
+                onClick={testTelegram}
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 disabled:opacity-50"
+              >
+                {t(language, "testConnection")}
+              </button>
+              <button
+                type="button"
+                onClick={onConnectTelegram}
                 className="brand-bg rounded-md px-3 py-2 text-sm font-semibold text-white"
               >
                 {t(language, "connect")}

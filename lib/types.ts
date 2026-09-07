@@ -194,7 +194,35 @@ export type EmailIntegration = {
   fromName: string;
 };
 
+export type WhatsAppIntegration = {
+  connected: boolean;
+  phoneNumberId: string;
+  accessToken: string;
+  /** Optional WhatsApp Business Account ID */
+  wabaId: string;
+};
+
+export type TelegramIntegration = {
+  connected: boolean;
+  botToken: string;
+  /** Optional default chat id for quick sends */
+  defaultChatId: string;
+};
+
+export type MessagingSend = {
+  id: string;
+  channel: "whatsapp" | "telegram";
+  to: string;
+  body: string;
+  status: "sent" | "failed";
+  providerId?: string;
+  error?: string;
+  createdAt: string;
+};
+
 export type Integrations = {
   sms: SmsIntegration;
   email: EmailIntegration;
+  whatsapp: WhatsAppIntegration;
+  telegram: TelegramIntegration;
 };
