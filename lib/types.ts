@@ -282,3 +282,16 @@ export type Session = {
 
 /** User shape returned to the client (never includes passwordHash). */
 export type SafeUser = Omit<AppUser, "passwordHash">;
+
+export type BillingStatus = "unpaid" | "paid";
+
+export type BillingProvider = "stripe" | "paypal";
+
+export type UserBilling = {
+  status: BillingStatus;
+  amountCents?: number;
+  currency: "usd";
+  provider?: BillingProvider;
+  paidAt?: string;
+  externalId?: string;
+};

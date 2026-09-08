@@ -29,6 +29,7 @@ import {
   Phone,
   Send,
   UserCog,
+  Wallet,
 } from "lucide-react";
 import Logo from "@/components/Logo";
 import { t, type DictKey } from "@/lib/i18n";
@@ -220,6 +221,7 @@ export default function Sidebar() {
       <div className="border-t border-slate-100 p-2 pb-4 space-y-0.5">
         {admin &&
           renderItem({ href: "/dashboard/users", key: "users", icon: UserCog })}
+        {renderItem({ href: "/dashboard/billing", key: "billing", icon: Wallet })}
         {canSee("/dashboard/settings") &&
           renderItem({ href: "/dashboard/settings", key: "settings", icon: Settings })}
       </div>

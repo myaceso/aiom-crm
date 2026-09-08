@@ -14,3 +14,16 @@
 
 ## Env
 See `.env.example` for `AUTH_SECRET`, `KV_*`, `RESEND_API_KEY`, `EMAIL_FROM`, `ADMIN_NOTIFY_EMAIL`, `NEXT_PUBLIC_APP_URL`.
+
+## Billing (Stripe + PayPal)
+- Per-account one-time subscription payment ($10 preset or custom USD, min $1)
+- UI: `/dashboard/billing` (sidebar **Billing**)
+- Status stored server-side at `enone:billing:{userId}` (KV / Postgres / local `.data`)
+- APIs:
+  - `GET /api/billing/status`
+  - `POST /api/billing/stripe/checkout` `{ amountCents }`
+  - `POST /api/billing/stripe/webhook` (`checkout.session.completed`)
+  - `POST /api/billing/paypal/create` `{ amountCents }`
+  - `POST /api/billing/paypal/capture` `{ orderId }`
+- Env: `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_MODE`, `NEXT_PUBLIC_PAYPAL_CLIENT_ID`, `NEXT_PUBLIC_APP_URL`
+- Stripe webhook URL: `https://<host>/api/billing/stripe/webhook`
