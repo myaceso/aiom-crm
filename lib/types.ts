@@ -242,7 +242,8 @@ export type PermissionKey =
   | "sites"
   | "calendars"
   | "settings"
-  | "users";
+  | "users"
+  | "aiAssistants";
 
 export type UserRole = "admin" | "staff";
 

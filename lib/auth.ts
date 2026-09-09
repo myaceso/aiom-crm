@@ -16,6 +16,7 @@ export const ALL_PERMISSIONS: PermissionKey[] = [
   "calendars",
   "settings",
   "users",
+  "aiAssistants",
 ];
 
 export const STAFF_PERMISSIONS: PermissionKey[] = ALL_PERMISSIONS.filter(
@@ -39,6 +40,7 @@ export const ROUTE_PERMISSIONS: { prefix: string; permission: PermissionKey | nu
   { prefix: "/dashboard/sites", permission: "sites" },
   { prefix: "/dashboard/calendars", permission: "calendars" },
   { prefix: "/dashboard/settings", permission: "settings" },
+  { prefix: "/dashboard/ai-assistants", permission: "aiAssistants" },
 ];
 
 const PBKDF2_ITERATIONS = 100_000;

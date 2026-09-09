@@ -28,6 +28,7 @@ const PERM_LABEL: Record<PermissionKey, DictKey> = {
   calendars: "perm_calendars",
   settings: "perm_settings",
   users: "perm_users",
+  aiAssistants: "perm_aiAssistants",
 };
 
 type FormState = {
