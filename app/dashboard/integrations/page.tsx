@@ -21,6 +21,7 @@ import type { EmailProvider, SocialNetworkId } from "@/lib/types";
 import { isValidProfileUrl, normalizeProfileUrl } from "@/lib/social";
 import { useStore } from "@/store/useStore";
 import clsx from "clsx";
+import { MetaConnectPanel } from "@/components/marketing/MetaConnectPanel";
 
 const NETWORK_ICONS: Record<SocialNetworkId, typeof Facebook> = {
   facebook: Facebook,
@@ -322,7 +323,10 @@ export default function IntegrationsPage() {
           </span>
         </div>
         <div className="space-y-3">
-          {connections.map((c) => {
+          <MetaConnectPanel />
+          {connections
+            .filter((c) => c.id !== "facebook" && c.id !== "instagram")
+            .map((c) => {
             const Icon = NETWORK_ICONS[c.id];
             return (
               <div

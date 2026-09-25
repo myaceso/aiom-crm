@@ -118,6 +118,16 @@ type Store = {
     }
   ) => void;
   disconnectSocial: (id: SocialNetworkId) => void;
+  /** Save Meta (Facebook Page + Instagram) credentials for both networks at once. */
+  connectMeta: (data: {
+    pageId: string;
+    accessToken: string;
+    igUserId?: string;
+    pageName?: string;
+    igUsername?: string;
+    connectInstagram: boolean;
+  }) => void;
+  disconnectMeta: () => void;
   updateSocialDraft: (
     id: SocialNetworkId,
     data: Partial<
@@ -129,6 +139,7 @@ type Store = {
   addMediaAsset: (asset: MediaAsset) => void;
   removeMediaAsset: (id: string) => void;
   setMediaPreviewUrl: (id: string, previewUrl: string | undefined) => void;
+  setMediaCloud: (id: string, url: string, pathname?: string) => void;
   addSocialPost: (p: {
     body: string;
     channels: SocialNetworkId[];
@@ -584,6 +595,49 @@ export const useStore = create<Store>()(
             ),
           };
         }),
+      connectMeta: (data) =>
+        set((s) => {
+          const merged = mergeSocialConnections(s.socialConnections);
+          const verifiedAt = new Date().toISOString();
+          return {
+            socialConnections: merged.map((c) => {
+              if (c.id !== "facebook" && c.id !== "instagram") return c;
+              const isIg = c.id === "instagram";
+              const base = {
+                ...c,
+                accessToken: data.accessToken.trim(),
+                pageId: data.pageId.trim(),
+                igUserId: (data.igUserId || "").trim(),
+                pageName: data.pageName || "",
+                igUsername: data.igUsername || "",
+                verifiedAt,
+              };
+              if (isIg) {
+                const handle = data.igUsername ? `@${data.igUsername}` : c.handle || "";
+                return {
+                  ...base,
+                  connected: data.connectInstagram,
+                  handle,
+                  profileUrl: data.igUsername ? `https://www.instagram.com/${data.igUsername}` : c.profileUrl || "",
+                };
+              }
+              return {
+                ...base,
+                connected: true,
+                handle: data.pageName || c.handle || "",
+                profileUrl: data.pageId ? `https://www.facebook.com/${data.pageId.trim()}` : c.profileUrl || "",
+              };
+            }),
+          };
+        }),
+      disconnectMeta: () =>
+        set((s) => ({
+          socialConnections: mergeSocialConnections(s.socialConnections).map((c) =>
+            c.id === "facebook" || c.id === "instagram"
+              ? { ...c, connected: false, accessToken: "", verifiedAt: undefined }
+              : c
+          ),
+        })),
       updateSocialDraft: (id, data) =>
         set((s) => ({
           socialConnections: s.socialConnections.map((c) =>
@@ -604,6 +658,8 @@ export const useStore = create<Store>()(
               createdAt: asset.createdAt,
               previewUrl: asset.previewUrl,
               durationSec: asset.durationSec,
+              url: asset.url,
+              pathname: asset.pathname,
             },
             ...s.mediaAssets.filter((m) => m.id !== asset.id),
           ],
@@ -616,6 +672,12 @@ export const useStore = create<Store>()(
         set((s) => ({
           mediaAssets: s.mediaAssets.map((m) =>
             m.id === id ? { ...m, previewUrl } : m
+          ),
+        })),
+      setMediaCloud: (id, url, pathname) =>
+        set((s) => ({
+          mediaAssets: s.mediaAssets.map((m) =>
+            m.id === id ? { ...m, url, pathname } : m
           ),
         })),
       addSocialPost: (p) =>

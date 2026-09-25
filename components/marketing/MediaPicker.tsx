@@ -20,10 +20,11 @@ import clsx from "clsx";
 import { t } from "@/lib/i18n";
 import type { Lang, MediaAsset } from "@/lib/types";
 import { saveMediaBlob, deleteMediaBlob } from "@/lib/mediaDb";
+import { toInstagramFriendlyImage, uploadToCloud } from "@/lib/mediaCloud";
 import { useStore } from "@/store/useStore";
 
 const IMAGE_MAX = 10 * 1024 * 1024;
-const VIDEO_MAX = 50 * 1024 * 1024;
+const VIDEO_MAX = 200 * 1024 * 1024;
 
 function formatBytes(n: number) {
   if (n < 1024) return `${n} B`;
@@ -117,6 +118,7 @@ export function MediaPicker({
   const mediaAssets = useStore((s) => s.mediaAssets);
   const addMediaAsset = useStore((s) => s.addMediaAsset);
   const removeMediaAsset = useStore((s) => s.removeMediaAsset);
+  const userId = useStore((s) => s.session?.userId || "");
   const showToast = useStore((s) => s.showToast);
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -132,7 +134,8 @@ export function MediaPicker({
       setUploading(true);
       const added: string[] = [];
       try {
-        for (const file of list) {
+        for (const original of list) {
+          let file = original;
           const isImage = file.type.startsWith("image/");
           const isVideo = file.type.startsWith("video/");
           if (!isImage && !isVideo) {
@@ -146,6 +149,7 @@ export function MediaPicker({
             );
             continue;
           }
+          if (isImage) file = await toInstagramFriendlyImage(file);
           const id = uid();
           try {
             await saveMediaBlob(id, file);
@@ -173,6 +177,18 @@ export function MediaPicker({
             previewUrl,
             durationSec,
           };
+          // Upload to public cloud storage so Facebook/Instagram (and the cron) can fetch it
+          if (userId) {
+            try {
+              const cloud = await uploadToCloud(userId, id, file, file.name, asset.mime);
+              asset.url = cloud.url;
+              asset.pathname = cloud.pathname;
+            } catch (err) {
+              showToast(
+                `${language === "es" ? "No se pudo subir a la nube (se reintentará al publicar)" : "Cloud upload failed (will retry on publish)"}: ${err instanceof Error ? err.message : ""}`
+              );
+            }
+          }
           addMediaAsset(asset);
           added.push(id);
         }
@@ -185,7 +201,7 @@ export function MediaPicker({
         if (inputRef.current) inputRef.current.value = "";
       }
     },
-    [addMediaAsset, language, onChange, selectedIds, showToast]
+    [addMediaAsset, language, onChange, selectedIds, showToast, userId]
   );
 
   function onInputChange(e: ChangeEvent<HTMLInputElement>) {
@@ -366,6 +382,7 @@ export function MediaThumb({
   removable?: boolean;
   compact?: boolean;
 }) {
+  const preview = asset.previewUrl || (asset.kind === "image" ? asset.url : undefined);
   return (
     <div
       className={clsx(
@@ -373,10 +390,10 @@ export function MediaThumb({
         compact ? "h-12 w-12" : "aspect-square"
       )}
     >
-      {asset.previewUrl && asset.kind === "image" ? (
+      {preview && asset.kind === "image" ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={asset.previewUrl}
+          src={preview}
           alt={asset.name}
           className="h-full w-full object-cover"
         />
@@ -385,6 +402,14 @@ export function MediaThumb({
         <img
           src={asset.previewUrl}
           alt={asset.name}
+          className="h-full w-full object-cover"
+        />
+      ) : asset.url && asset.kind === "video" ? (
+        <video
+          src={`${asset.url}#t=0.1`}
+          muted
+          playsInline
+          preload="metadata"
           className="h-full w-full object-cover"
         />
       ) : (
@@ -417,6 +442,17 @@ export function MediaThumb({
             )}
           </div>
         </div>
+      )}
+      {!compact && (
+        <span
+          className={clsx(
+            "absolute bottom-1 right-1 rounded px-1 py-0.5 text-[8px] font-bold uppercase",
+            asset.url ? "bg-emerald-500/90 text-white" : "bg-amber-400/90 text-amber-950"
+          )}
+          title={asset.url ? "Cloud" : "Local"}
+        >
+          {asset.url ? (language === "es" ? "nube" : "cloud") : "local"}
+        </span>
       )}
       {asset.kind === "video" && (
         <span className="absolute left-1 top-1 rounded bg-black/60 px-1 py-0.5 text-[9px] font-semibold text-white">
@@ -455,6 +491,8 @@ export function useMediaPreviewHydration() {
         if (asset.previewUrl) continue;
         const url = await createPreviewUrl(asset.id);
         if (url && !cancelled) setMediaPreviewUrl(asset.id, url);
+        else if (!url && asset.url && asset.kind === "image" && !cancelled)
+          setMediaPreviewUrl(asset.id, asset.url);
       }
     }
     if (!ran.current || mediaAssets.some((m) => !m.previewUrl)) {

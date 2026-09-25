@@ -101,6 +101,13 @@ export type SocialConnection = {
   accessToken?: string;
   /** Facebook Page ID (and/or used to resolve IG Business account) */
   pageId?: string;
+  /** Instagram Business/Creator account id linked to the Page (auto-detected or manual override) */
+  igUserId?: string;
+  /** Display info filled by "Probar conexión" */
+  pageName?: string;
+  igUsername?: string;
+  /** ISO time of last successful connection test */
+  verifiedAt?: string;
 };
 
 export type SocialPostStatus = "draft" | "scheduled" | "published";
@@ -117,6 +124,10 @@ export type MediaAsset = {
   /** Session-only object URL; never persisted to localStorage */
   previewUrl?: string;
   durationSec?: number;
+  /** Public cloud URL (Vercel Blob) — required for Instagram and server-side scheduled posts */
+  url?: string;
+  /** Blob pathname (for housekeeping) */
+  pathname?: string;
 };
 
 export type SocialMediaMeta = {
@@ -136,6 +147,49 @@ export type SocialPost = {
   publishedAt: string | null;
   createdAt: string;
   mediaIds: string[];
+};
+
+/** Server-side (cron-driven) social publishing job for Facebook / Instagram. */
+export type MetaChannel = "facebook" | "instagram";
+
+export type ScheduledPostStatus = "scheduled" | "publishing" | "published" | "failed" | "cancelled";
+
+export type ScheduledPostMedia = {
+  url: string;
+  kind: MediaKind;
+  mime: string;
+  name: string;
+  assetId?: string;
+};
+
+export type ScheduledPostChannelResult = {
+  ok: boolean;
+  /** FB post id / IG media id */
+  id?: string;
+  permalink?: string;
+  error?: string;
+  /** IG container still processing (resumed on next cron run) */
+  containerId?: string;
+  at?: string;
+};
+
+export type ScheduledPost = {
+  id: string;
+  userId: string;
+  body: string;
+  channels: MetaChannel[];
+  media: ScheduledPostMedia[];
+  status: ScheduledPostStatus;
+  scheduledAt: string;
+  createdAt: string;
+  updatedAt: string;
+  publishedAt?: string | null;
+  attempts: number;
+  /** Next automatic retry time (while status is "scheduled" after a failed attempt) */
+  nextAttemptAt?: string | null;
+  lockedAt?: string | null;
+  lastError?: string | null;
+  results: Partial<Record<MetaChannel, ScheduledPostChannelResult>>;
 };
 
 export type SmsCampaignStatus = "draft" | "scheduled" | "sent";

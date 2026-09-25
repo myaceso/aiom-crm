@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Facebook,
@@ -12,10 +12,22 @@ import {
   CheckCircle2,
   ExternalLink,
   Plug,
+  RefreshCw,
+  RotateCcw,
+  Trash2,
+  XCircle,
+  Clock,
+  Loader2,
+  AlertTriangle,
 } from "lucide-react";
 import { format } from "date-fns";
 import { t } from "@/lib/i18n";
-import type { SocialNetworkId, SocialPostStatus } from "@/lib/types";
+import type {
+  MetaChannel,
+  ScheduledPost,
+  ScheduledPostStatus,
+  SocialNetworkId,
+} from "@/lib/types";
 import { useStore } from "@/store/useStore";
 import clsx from "clsx";
 import {
@@ -23,7 +35,7 @@ import {
   MediaThumb,
   useMediaPreviewHydration,
 } from "@/components/marketing/MediaPicker";
-import { getMediaBlob } from "@/lib/mediaDb";
+import { ensureCloudMedia } from "@/lib/mediaCloud";
 import { normalizeProfileUrl } from "@/lib/social";
 
 const NETWORK_ICONS: Record<SocialNetworkId, typeof Facebook> = {
@@ -44,25 +56,38 @@ const NETWORK_COLORS: Record<SocialNetworkId, string> = {
   google_business: "bg-[#4285F4]",
 };
 
-const STATUS_KEY: Record<SocialPostStatus, "draft" | "scheduled" | "published"> = {
-  draft: "draft",
-  scheduled: "scheduled",
-  published: "published",
-};
+const META: MetaChannel[] = ["facebook", "instagram"];
+const IG_CAPTION_MAX = 2200;
+
+type Filter = "all" | "scheduled" | "published" | "failed";
+
+function toLocalInput(d: Date) {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
 
 export default function MarketingPage() {
   const language = useStore((s) => s.settings.language);
   const connections = useStore((s) => s.socialConnections);
-  const posts = useStore((s) => s.socialPosts);
+  const localPosts = useStore((s) => s.socialPosts);
   const mediaAssets = useStore((s) => s.mediaAssets);
   const addSocialPost = useStore((s) => s.addSocialPost);
+  const setMediaCloud = useStore((s) => s.setMediaCloud);
+  const userId = useStore((s) => s.session?.userId || "");
   const showToast = useStore((s) => s.showToast);
+  const L = useCallback((es: string, en: string) => (language === "es" ? es : en), [language]);
 
   const [body, setBody] = useState("");
-  const [channels, setChannels] = useState<SocialNetworkId[]>([]);
+  const [channels, setChannels] = useState<MetaChannel[]>([]);
+  const [mode, setMode] = useState<"now" | "schedule">("now");
   const [scheduledAt, setScheduledAt] = useState("");
   const [mediaIds, setMediaIds] = useState<string[]>([]);
-  const [publishing, setPublishing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [posts, setPosts] = useState<ScheduledPost[]>([]);
+  const [loadingPosts, setLoadingPosts] = useState(true);
+  const [filter, setFilter] = useState<Filter>("all");
+  const [rowBusy, setRowBusy] = useState<string | null>(null);
+  const [showLocal, setShowLocal] = useState(false);
 
   useMediaPreviewHydration();
 
@@ -70,21 +95,44 @@ export default function MarketingPage() {
     () => new Set(connections.filter((c) => c.connected).map((c) => c.id)),
     [connections]
   );
-  const hasConnected = connectedIds.size > 0;
+  const metaConnected = connectedIds.has("facebook") || connectedIds.has("instagram");
+  const mediaById = useMemo(() => new Map(mediaAssets.map((m) => [m.id, m])), [mediaAssets]);
 
-  const mediaById = useMemo(() => {
-    const map = new Map(mediaAssets.map((m) => [m.id, m]));
-    return map;
-  }, [mediaAssets]);
+  const loadPosts = useCallback(async () => {
+    try {
+      const res = await fetch("/api/social/posts", { credentials: "include", cache: "no-store" });
+      if (!res.ok) return;
+      const d = await res.json();
+      setPosts(Array.isArray(d.posts) ? d.posts : []);
+    } catch {
+      /* ignore */
+    } finally {
+      setLoadingPosts(false);
+    }
+  }, []);
 
-  function toggleChannel(id: SocialNetworkId) {
+  useEffect(() => {
+    void loadPosts();
+  }, [loadPosts]);
+
+  // Light polling while something is pending (publishing itself happens on the server via cron)
+  const hasPending = posts.some((p) => p.status === "scheduled" || p.status === "publishing");
+  useEffect(() => {
+    if (!hasPending) return;
+    const id = setInterval(() => void loadPosts(), 30_000);
+    return () => clearInterval(id);
+  }, [hasPending, loadPosts]);
+
+  function upsert(p: ScheduledPost) {
+    setPosts((prev) => [p, ...prev.filter((x) => x.id !== p.id)].sort((a, b) => +new Date(b.scheduledAt) - +new Date(a.scheduledAt)));
+  }
+
+  function toggleChannel(id: MetaChannel) {
     if (!connectedIds.has(id)) {
       showToast(t(language, "channelNotConnected"));
       return;
     }
-    setChannels((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
+    setChannels((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
   function resetComposer() {
@@ -92,163 +140,197 @@ export default function MarketingPage() {
     setChannels([]);
     setScheduledAt("");
     setMediaIds([]);
+    setMode("now");
   }
 
-  async function submit(status: SocialPostStatus) {
-    if (!hasConnected) {
+  const selectedMedia = mediaIds.map((id) => mediaById.get(id)).filter(Boolean);
+  const hasVideo = selectedMedia.some((m) => m!.kind === "video");
+  const hasImage = selectedMedia.some((m) => m!.kind === "image");
+
+  async function submit() {
+    if (!metaConnected) {
       showToast(t(language, "connectRequired"));
       return;
     }
-    if (!body.trim() && mediaIds.length === 0) {
-      showToast(
-        language === "es"
-          ? "Escribe un mensaje o adjunta medios"
-          : "Write a post or attach media"
-      );
-      return;
-    }
     if (channels.length === 0) {
-      showToast(t(language, "selectChannelRequired"));
+      showToast(L("Elige Facebook, Instagram o ambos", "Choose Facebook, Instagram or both"));
       return;
     }
-    if (status === "scheduled" && !scheduledAt) {
-      showToast(
-        language === "es" ? "Elige fecha y hora" : "Pick a schedule date"
-      );
+    if (!body.trim() && mediaIds.length === 0) {
+      showToast(L("Escribe un mensaje o adjunta medios", "Write a post or attach media"));
       return;
     }
+    if (channels.includes("instagram") && mediaIds.length === 0) {
+      showToast(L("Instagram requiere al menos una imagen o un video", "Instagram requires at least one image or video"));
+      return;
+    }
+    if (channels.includes("instagram") && body.length > IG_CAPTION_MAX) {
+      showToast(L(`Máximo ${IG_CAPTION_MAX} caracteres para Instagram`, `Max ${IG_CAPTION_MAX} characters for Instagram`));
+      return;
+    }
+    let when: string | undefined;
+    if (mode === "schedule") {
+      if (!scheduledAt) {
+        showToast(L("Elige fecha y hora", "Pick a date and time"));
+        return;
+      }
+      const d = new Date(scheduledAt);
+      if (+d < Date.now() - 60_000) {
+        showToast(L("La fecha programada ya pasó", "Scheduled time is in the past"));
+        return;
+      }
+      when = d.toISOString();
+    }
 
-    const mediaMeta = mediaIds
-      .map((id) => mediaById.get(id))
-      .filter(Boolean)
-      .map((m) => ({
-        id: m!.id,
-        kind: m!.kind,
-        name: m!.name,
-        size: m!.size,
-        mime: m!.mime,
-      }));
-
-    if (status === "published") {
-      setPublishing(true);
-      try {
-        const form = new FormData();
-        form.set("body", body.trim());
-        form.set("lang", language);
-        form.set("channels", JSON.stringify(channels));
-        form.set(
-          "connections",
-          JSON.stringify(
-            connections.map((c) => ({
-              id: c.id,
-              connected: c.connected,
-              handle: c.handle,
-              profileUrl: c.profileUrl,
-              accessToken: c.accessToken,
-              pageId: c.pageId,
-            }))
-          )
-        );
-        form.set("mediaMeta", JSON.stringify(mediaMeta));
-
-        for (const id of mediaIds) {
-          const meta = mediaById.get(id);
-          const blob = await getMediaBlob(id);
-          if (blob) {
-            form.append(
-              "media",
-              blob,
-              meta?.name || `${id}.${meta?.kind === "video" ? "mp4" : "jpg"}`
-            );
-          }
-        }
-
-        const res = await fetch("/api/social/publish", {
-          method: "POST",
-          body: form,
-        });
-        const data = (await res.json().catch(() => ({}))) as {
-          error?: string;
-          message?: string;
-          ok?: boolean;
-          published?: string[];
-          failed?: string[];
-          results?: Array<{
-            id: string;
-            ok: boolean;
-            reason?: string;
-            detail?: string;
-          }>;
-        };
-
-        if (!res.ok || !data.ok) {
-          const detail =
-            data.error ||
-            data.results?.find((r) => !r.ok)?.detail ||
-            t(language, "publishNeedsMetaToken");
-          showToast(detail);
+    setBusy(true);
+    try {
+      // 1) Make sure every attachment has a public cloud URL
+      const media = [];
+      for (const id of mediaIds) {
+        const asset = mediaById.get(id);
+        if (!asset) continue;
+        let url: string | null = null;
+        try {
+          url = await ensureCloudMedia(asset, userId, setMediaCloud);
+        } catch (e) {
+          showToast(`${L("Error subiendo", "Upload error")} ${asset.name}: ${e instanceof Error ? e.message : ""}`);
           return;
         }
-
-        const publishedChannels = data.published?.length
-          ? (data.published as SocialNetworkId[])
-          : channels;
-
-        addSocialPost({
-          body: body.trim(),
-          channels: publishedChannels,
-          status: "published",
-          scheduledAt: null,
-          mediaIds: [...mediaIds],
-        });
-        resetComposer();
-
-        if (data.failed && data.failed.length > 0) {
+        if (!url) {
           showToast(
-            `${t(language, "publishPartial")}: ${data.published?.join(", ") || ""} · ${data.failed.join(", ")}`
+            L(
+              `«${asset.name}» solo está guardado en otro dispositivo. Súbelo de nuevo.`,
+              `“${asset.name}” only exists on another device. Upload it again.`
+            )
           );
-        } else {
-          showToast(data.message || t(language, "publishSuccess"));
+          return;
         }
-      } catch {
-        showToast(t(language, "publishFailed"));
-      } finally {
-        setPublishing(false);
+        media.push({ url, kind: asset.kind, mime: asset.mime, name: asset.name, assetId: asset.id });
       }
+
+      // 2) Create the server-side post (published now or queued for the cron)
+      const res = await fetch("/api/social/posts", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          body: body.trim(),
+          channels,
+          media,
+          publishNow: mode === "now",
+          scheduledAt: when,
+          lang: language,
+        }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { post?: ScheduledPost; error?: string };
+      if (!res.ok || !d.post) {
+        showToast(d.error || t(language, "publishFailed"));
+        return;
+      }
+      upsert(d.post);
+      const p = d.post;
+      if (mode === "schedule") {
+        showToast(L("Programada: se publicará aunque cierres el navegador", "Scheduled: it will publish even if you close the browser"));
+        resetComposer();
+      } else if (p.status === "published") {
+        showToast(t(language, "publishSuccess"));
+        resetComposer();
+      } else if (p.status === "failed") {
+        const okOnes = META.filter((c) => p.results?.[c]?.ok);
+        showToast(
+          okOnes.length
+            ? `${t(language, "publishPartial")}: ${okOnes.join(", ")} · ${p.lastError || ""}`
+            : p.lastError || t(language, "publishFailed")
+        );
+        if (okOnes.length) resetComposer();
+      } else {
+        showToast(p.lastError || L("En proceso — se completará en segundo plano", "In progress — will finish in the background"));
+        resetComposer();
+      }
+    } catch {
+      showToast(t(language, "publishFailed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function saveDraft() {
+    if (!body.trim() && mediaIds.length === 0) {
+      showToast(L("Escribe un mensaje o adjunta medios", "Write a post or attach media"));
       return;
     }
-
-    // Schedule / draft — local only (honest)
-    addSocialPost({
-      body: body.trim(),
-      channels,
-      status,
-      scheduledAt:
-        status === "scheduled" ? new Date(scheduledAt).toISOString() : null,
-      mediaIds: [...mediaIds],
-    });
+    addSocialPost({ body: body.trim(), channels, status: "draft", scheduledAt: null, mediaIds: [...mediaIds] });
     resetComposer();
-    showToast(
-      status === "scheduled"
-        ? t(language, "scheduleSuccess")
-        : t(language, "draftSuccess")
-    );
+    showToast(t(language, "draftSuccess"));
   }
 
-  function onComposer(e: FormEvent) {
-    e.preventDefault();
-    // Enter in form should not silently schedule — default to publish
-    void submit("published");
+  async function rowAction(p: ScheduledPost, action: "retry" | "cancel" | "delete") {
+    if (action === "delete" && !confirm(L("¿Quitar de la lista? (No se borra de Facebook/Instagram)", "Remove from list? (Not deleted from Facebook/Instagram)"))) return;
+    setRowBusy(p.id);
+    try {
+      const res = await fetch(`/api/social/posts/${p.id}`, {
+        method: action === "delete" ? "DELETE" : "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: action === "delete" ? undefined : JSON.stringify({ action }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(d.error || "Error");
+        return;
+      }
+      if (action === "delete") setPosts((prev) => prev.filter((x) => x.id !== p.id));
+      else if (d.post) {
+        upsert(d.post);
+        if (action === "retry")
+          showToast(d.post.status === "published" ? t(language, "publishSuccess") : d.post.lastError || L("Reintento enviado", "Retry sent"));
+      }
+    } finally {
+      setRowBusy(null);
+    }
   }
+
+  function loadDraft(id: string) {
+    const p = localPosts.find((x) => x.id === id);
+    if (!p) return;
+    setBody(p.body);
+    setChannels(p.channels.filter((c): c is MetaChannel => c === "facebook" || c === "instagram").filter((c) => connectedIds.has(c)));
+    setMediaIds((p.mediaIds || []).filter((m) => mediaById.has(m)));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  const statusLabel: Record<ScheduledPostStatus, string> = {
+    scheduled: L("Programada", "Scheduled"),
+    publishing: L("Publicando", "Publishing"),
+    published: L("Publicada", "Published"),
+    failed: L("Fallida", "Failed"),
+    cancelled: L("Cancelada", "Cancelled"),
+  };
+
+  const filtered = posts.filter((p) =>
+    filter === "all"
+      ? true
+      : filter === "scheduled"
+        ? p.status === "scheduled" || p.status === "publishing"
+        : filter === "failed"
+          ? p.status === "failed" || p.status === "cancelled"
+          : p.status === filter
+  );
+  const counts = {
+    all: posts.length,
+    scheduled: posts.filter((p) => p.status === "scheduled" || p.status === "publishing").length,
+    published: posts.filter((p) => p.status === "published").length,
+    failed: posts.filter((p) => p.status === "failed" || p.status === "cancelled").length,
+  };
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-slate-800">
-            {t(language, "marketing")}
-          </h1>
-          <p className="text-sm text-slate-500">{t(language, "socialNetworks")}</p>
+          <h1 className="text-xl font-semibold text-slate-800">{t(language, "marketing")}</h1>
+          <p className="text-sm text-slate-500">
+            {L("Publica y programa en Facebook e Instagram automáticamente", "Publish and schedule to Facebook & Instagram automatically")}
+          </p>
         </div>
         <Link
           href="/dashboard/integrations"
@@ -259,43 +341,31 @@ export default function MarketingPage() {
         </Link>
       </div>
 
-      {!hasConnected && (
+      {!metaConnected && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          {t(language, "connectRequired")}{" "}
-          <Link
-            href="/dashboard/integrations"
-            className="font-semibold underline"
-          >
+          {L(
+            "Conecta tu Página de Facebook (y tu Instagram profesional) en Integraciones para publicar.",
+            "Connect your Facebook Page (and Instagram professional account) in Integrations to publish."
+          )}{" "}
+          <Link href="/dashboard/integrations" className="font-semibold underline">
             {t(language, "goToIntegrations")}
           </Link>
         </div>
       )}
 
       <section>
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">
-          {t(language, "socialNetworks")}
-        </h2>
+        <h2 className="mb-3 text-sm font-semibold text-slate-700">{t(language, "socialNetworks")}</h2>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {connections.map((c) => {
             const Icon = NETWORK_ICONS[c.id];
             return (
-              <div
-                key={c.id}
-                className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
-              >
-                <div
-                  className={clsx(
-                    "flex h-10 w-10 items-center justify-center rounded-lg text-white",
-                    NETWORK_COLORS[c.id]
-                  )}
-                >
+              <div key={c.id} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className={clsx("flex h-10 w-10 items-center justify-center rounded-lg text-white", NETWORK_COLORS[c.id])}>
                   <Icon className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <div className="truncate text-sm font-semibold text-slate-800">
-                      {c.name}
-                    </div>
+                    <div className="truncate text-sm font-semibold text-slate-800">{c.name}</div>
                     {c.connected && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">
                         <CheckCircle2 className="h-3 w-3" />
@@ -304,9 +374,7 @@ export default function MarketingPage() {
                     )}
                   </div>
                   <div className="truncate text-xs text-slate-500">
-                    {c.connected
-                      ? c.handle || t(language, "connected")
-                      : t(language, "notConnected")}
+                    {c.connected ? c.handle || t(language, "connected") : t(language, "notConnected")}
                   </div>
                   {c.connected && c.profileUrl && (
                     <a
@@ -328,181 +396,376 @@ export default function MarketingPage() {
 
       <section className="grid gap-4 lg:grid-cols-2">
         <form
-          onSubmit={onComposer}
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submit();
+          }}
           className="w-full min-w-0 space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
         >
-          <h2 className="text-sm font-semibold text-slate-700">
-            {t(language, "postComposer")}
-          </h2>
+          <h2 className="text-sm font-semibold text-slate-700">{t(language, "postComposer")}</h2>
+
           <div>
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              {t(language, "channels")}
+              {L("Publicar en", "Publish to")}
             </label>
             <div className="flex flex-wrap gap-2">
-              {connections.map((c) => {
-                const Icon = NETWORK_ICONS[c.id];
-                const active = channels.includes(c.id);
-                const disabled = !c.connected;
+              {META.map((id) => {
+                const Icon = NETWORK_ICONS[id];
+                const active = channels.includes(id);
+                const disabled = !connectedIds.has(id);
                 return (
                   <button
-                    key={c.id}
+                    key={id}
                     type="button"
                     disabled={disabled}
-                    onClick={() => toggleChannel(c.id)}
+                    onClick={() => toggleChannel(id)}
                     className={clsx(
-                      "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition",
+                      "inline-flex min-h-[36px] items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium transition",
                       disabled && "cursor-not-allowed opacity-40",
                       active
                         ? "border-[var(--brand)] bg-[var(--brand)]/10 text-[var(--brand)]"
                         : "border-slate-200 text-slate-600 hover:bg-slate-50"
                     )}
                   >
-                    <Icon className="h-3.5 w-3.5" />
-                    {c.name}
+                    <Icon className="h-4 w-4" />
+                    {id === "facebook" ? "Facebook" : "Instagram"}
+                    {active && <CheckCircle2 className="h-3.5 w-3.5" />}
                   </button>
                 );
               })}
+              {connectedIds.has("facebook") && connectedIds.has("instagram") && (
+                <button
+                  type="button"
+                  onClick={() => setChannels(channels.length === 2 ? [] : ["facebook", "instagram"])}
+                  className="min-h-[36px] rounded-full border border-dashed border-slate-300 px-3 py-1 text-xs font-medium text-slate-500 hover:bg-slate-50"
+                >
+                  {channels.length === 2 ? L("Quitar ambas", "Clear") : L("Ambas", "Both")}
+                </button>
+              )}
             </div>
+            <p className="mt-1 text-[11px] text-slate-400">
+              {L(
+                "LinkedIn, X, TikTok y Google Business requieren apps OAuth (aún no disponibles).",
+                "LinkedIn, X, TikTok and Google Business need OAuth apps (not available yet)."
+              )}
+            </p>
           </div>
+
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              {t(language, "postBody")}
-            </label>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">{t(language, "postBody")}</label>
+              <span
+                className={clsx(
+                  "text-[11px]",
+                  channels.includes("instagram") && body.length > IG_CAPTION_MAX ? "font-semibold text-red-600" : "text-slate-400"
+                )}
+              >
+                {body.length}
+                {channels.includes("instagram") ? ` / ${IG_CAPTION_MAX}` : ""}
+              </span>
+            </div>
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
               rows={5}
               className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--brand)]/30"
-              placeholder={
-                language === "es"
-                  ? "¿Qué quieres publicar?"
-                  : "What do you want to share?"
-              }
+              placeholder={L("¿Qué quieres publicar?", "What do you want to share?")}
             />
           </div>
 
-          <MediaPicker
-            language={language}
-            selectedIds={mediaIds}
-            onChange={setMediaIds}
-            disabled={!hasConnected || publishing}
-          />
+          <MediaPicker language={language} selectedIds={mediaIds} onChange={setMediaIds} disabled={busy} />
+
+          {(channels.includes("instagram") && mediaIds.length === 0) || (hasVideo && hasImage && channels.includes("facebook")) ? (
+            <div className="flex items-start gap-1.5 rounded-md bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                {channels.includes("instagram") && mediaIds.length === 0
+                  ? L("Instagram necesita al menos una imagen o video.", "Instagram needs at least one image or video.")
+                  : L(
+                      "Facebook no mezcla video e imágenes: se publicará solo el video en Facebook (Instagram hará un carrusel).",
+                      "Facebook can't mix video and images: only the video is posted to Facebook (Instagram makes a carousel)."
+                    )}
+              </span>
+            </div>
+          ) : null}
 
           <div>
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              {t(language, "scheduleAt")}
+              {L("¿Cuándo?", "When?")}
             </label>
-            <input
-              type="datetime-local"
-              value={scheduledAt}
-              onChange={(e) => setScheduledAt(e.target.value)}
-              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--brand)]/30"
-            />
+            <div className="mb-2 inline-flex rounded-lg border border-slate-200 p-0.5 text-sm">
+              {(["now", "schedule"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    setMode(m);
+                    if (m === "schedule" && !scheduledAt) setScheduledAt(toLocalInput(new Date(Date.now() + 60 * 60_000)));
+                  }}
+                  className={clsx(
+                    "min-h-[34px] rounded-md px-3 py-1 font-medium",
+                    mode === m ? "brand-bg text-white" : "text-slate-600 hover:bg-slate-50"
+                  )}
+                >
+                  {m === "now" ? L("Publicar ahora", "Publish now") : L("Programar", "Schedule")}
+                </button>
+              ))}
+            </div>
+            {mode === "schedule" && (
+              <>
+                <input
+                  type="datetime-local"
+                  value={scheduledAt}
+                  min={toLocalInput(new Date())}
+                  onChange={(e) => setScheduledAt(e.target.value)}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--brand)]/30"
+                />
+                <p className="mt-1 text-[11px] text-slate-400">
+                  {L(
+                    "Hora de este dispositivo. El servidor la publica (±5 min) aunque cierres el navegador.",
+                    "This device's time. The server publishes it (±5 min) even with the browser closed."
+                  )}
+                </p>
+              </>
+            )}
           </div>
-          <p className="text-[11px] leading-snug text-slate-400">
-            {t(language, "publishRealOnly")}
-          </p>
+
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
             <button
               type="button"
-              onClick={() => void submit("draft")}
-              disabled={!hasConnected || publishing}
+              onClick={saveDraft}
+              disabled={busy}
               className="min-h-[40px] w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 sm:w-auto"
             >
               {t(language, "saveDraft")}
             </button>
             <button
-              type="button"
-              onClick={() => void submit("scheduled")}
-              disabled={!hasConnected || publishing}
-              className="min-h-[40px] w-full rounded-md border border-[var(--brand)]/30 bg-[var(--brand)]/10 px-3 py-2 text-sm font-semibold text-[var(--brand)] disabled:opacity-40 sm:w-auto"
+              type="submit"
+              disabled={busy || !metaConnected}
+              className="brand-bg inline-flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-40 sm:w-auto"
             >
-              {t(language, "schedulePost")}
-            </button>
-            <button
-              type="button"
-              onClick={() => void submit("published")}
-              disabled={!hasConnected || publishing}
-              className="brand-bg min-h-[40px] w-full rounded-md px-3 py-2 text-sm font-semibold text-white disabled:opacity-40 sm:w-auto"
-            >
-              {publishing
-                ? language === "es"
-                  ? "Publicando…"
-                  : "Publishing…"
-                : t(language, "publishNow")}
+              {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+              {busy
+                ? mode === "now"
+                  ? L("Publicando…", "Publishing…")
+                  : L("Programando…", "Scheduling…")
+                : mode === "now"
+                  ? L("Publicar ahora", "Publish now")
+                  : L("Programar publicación", "Schedule post")}
             </button>
           </div>
         </form>
 
         <div className="w-full min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          <h2 className="mb-3 text-sm font-semibold text-slate-700">
-            {t(language, "scheduledPosts")}
-          </h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-slate-700">{t(language, "scheduledPosts")}</h2>
+            <button
+              type="button"
+              onClick={() => void loadPosts()}
+              className="inline-flex items-center gap-1 text-xs font-medium text-[var(--brand)] hover:underline"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              {L("Actualizar", "Refresh")}
+            </button>
+          </div>
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            {(["all", "scheduled", "published", "failed"] as Filter[]).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setFilter(f)}
+                className={clsx(
+                  "rounded-full px-2.5 py-1 text-xs font-medium",
+                  filter === f ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                )}
+              >
+                {f === "all"
+                  ? L("Todas", "All")
+                  : f === "scheduled"
+                    ? L("Programadas", "Scheduled")
+                    : f === "published"
+                      ? L("Publicadas", "Published")
+                      : L("Fallidas", "Failed")}{" "}
+                ({counts[f]})
+              </button>
+            ))}
+          </div>
+
           <ul className="divide-y divide-slate-100">
-            {posts.map((p) => {
-              const postMedia = (p.mediaIds || [])
-                .map((id) => mediaById.get(id))
-                .filter(Boolean);
-              return (
-                <li key={p.id} className="py-3">
-                  <div className="mb-1 flex flex-wrap items-center gap-2">
-                    <span
-                      className={clsx(
-                        "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase",
-                        p.status === "published" &&
-                          "bg-emerald-50 text-emerald-700",
-                        p.status === "scheduled" && "bg-amber-50 text-amber-700",
-                        p.status === "draft" && "bg-slate-100 text-slate-600"
-                      )}
-                    >
-                      {t(language, STATUS_KEY[p.status])}
+            {filtered.map((p) => (
+              <li key={p.id} className="py-3">
+                <div className="mb-1 flex flex-wrap items-center gap-2">
+                  <span
+                    className={clsx(
+                      "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase",
+                      p.status === "published" && "bg-emerald-50 text-emerald-700",
+                      p.status === "scheduled" && "bg-amber-50 text-amber-700",
+                      p.status === "publishing" && "bg-blue-50 text-blue-700",
+                      p.status === "failed" && "bg-red-50 text-red-700",
+                      p.status === "cancelled" && "bg-slate-100 text-slate-500"
+                    )}
+                  >
+                    {p.status === "publishing" && <Loader2 className="h-3 w-3 animate-spin" />}
+                    {p.status === "scheduled" && <Clock className="h-3 w-3" />}
+                    {statusLabel[p.status]}
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    {p.publishedAt
+                      ? format(new Date(p.publishedAt), "MMM d, HH:mm")
+                      : format(new Date(p.scheduledAt), "MMM d, HH:mm")}
+                  </span>
+                  {p.attempts > 0 && (
+                    <span className="text-[10px] text-slate-400">
+                      {L("intentos", "attempts")}: {p.attempts}
                     </span>
-                    <span className="text-[11px] text-slate-400">
-                      {p.publishedAt
-                        ? format(new Date(p.publishedAt), "MMM d, HH:mm")
-                        : p.scheduledAt
-                          ? format(new Date(p.scheduledAt), "MMM d, HH:mm")
-                          : format(new Date(p.createdAt), "MMM d, HH:mm")}
-                    </span>
+                  )}
+                  <div className="ml-auto flex gap-1">
+                    {(p.status === "failed" || p.status === "cancelled" || (p.status === "scheduled" && p.lastError)) && (
+                      <button
+                        type="button"
+                        disabled={rowBusy === p.id}
+                        onClick={() => void rowAction(p, "retry")}
+                        title={L("Reintentar ahora", "Retry now")}
+                        className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                      >
+                        {rowBusy === p.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                        {L("Reintentar", "Retry")}
+                      </button>
+                    )}
+                    {p.status === "scheduled" && (
+                      <button
+                        type="button"
+                        disabled={rowBusy === p.id}
+                        onClick={() => void rowAction(p, "cancel")}
+                        title={L("Cancelar", "Cancel")}
+                        className="rounded-md border border-slate-200 p-1 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+                      >
+                        <XCircle className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {p.status !== "publishing" && (
+                      <button
+                        type="button"
+                        disabled={rowBusy === p.id}
+                        onClick={() => void rowAction(p, "delete")}
+                        title={L("Quitar de la lista", "Remove from list")}
+                        className="rounded-md border border-slate-200 p-1 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
-                  {p.body && (
-                    <p className="text-sm text-slate-700">{p.body}</p>
-                  )}
-                  {postMedia.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {postMedia.map((m) => (
-                        <MediaThumb
-                          key={m!.id}
-                          asset={m!}
-                          language={language}
-                          compact
-                        />
-                      ))}
-                    </div>
-                  )}
+                </div>
+                {p.body && <p className="whitespace-pre-wrap break-words text-sm text-slate-700">{p.body}</p>}
+                {p.media.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    {p.channels.map((ch) => {
-                      const Icon = NETWORK_ICONS[ch];
-                      return (
-                        <span
-                          key={ch}
-                          className="inline-flex items-center gap-1 rounded-md bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600"
-                        >
-                          <Icon className="h-3 w-3" />
-                          {connections.find((c) => c.id === ch)?.name || ch}
-                        </span>
-                      );
-                    })}
+                    {p.media.map((m, i) =>
+                      m.kind === "image" ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img key={i} src={m.url} alt={m.name} className="h-12 w-12 rounded-md border border-slate-200 object-cover" />
+                      ) : (
+                        <video key={i} src={`${m.url}#t=0.1`} muted preload="metadata" className="h-12 w-12 rounded-md border border-slate-200 object-cover" />
+                      )
+                    )}
                   </div>
-                </li>
-              );
-            })}
-            {posts.length === 0 && (
+                )}
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {p.channels.map((ch) => {
+                    const Icon = NETWORK_ICONS[ch];
+                    const r = p.results?.[ch];
+                    return (
+                      <span
+                        key={ch}
+                        title={r?.error || ""}
+                        className={clsx(
+                          "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium",
+                          r?.ok ? "bg-emerald-50 text-emerald-700" : r?.error ? "bg-red-50 text-red-700" : "bg-slate-50 text-slate-600"
+                        )}
+                      >
+                        <Icon className="h-3 w-3" />
+                        {ch === "facebook" ? "Facebook" : "Instagram"}
+                        {r?.ok && <CheckCircle2 className="h-3 w-3" />}
+                        {r?.ok && r.permalink && (
+                          <a href={r.permalink} target="_blank" rel="noreferrer" className="underline">
+                            {L("ver", "view")}
+                          </a>
+                        )}
+                        {r?.ok && !r.permalink && r.id && <span className="opacity-60">#{r.id}</span>}
+                      </span>
+                    );
+                  })}
+                </div>
+                {p.lastError && p.status !== "published" && (
+                  <p className="mt-1.5 flex items-start gap-1 text-[11px] leading-snug text-red-600">
+                    <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                    <span>
+                      {p.lastError}
+                      {p.status === "scheduled" && p.nextAttemptAt && (
+                        <span className="text-slate-500">
+                          {" "}
+                          · {L("reintento automático", "auto-retry")} {format(new Date(p.nextAttemptAt), "HH:mm")}
+                        </span>
+                      )}
+                    </span>
+                  </p>
+                )}
+              </li>
+            ))}
+            {!loadingPosts && filtered.length === 0 && (
               <li className="py-6 text-center text-sm text-slate-400">
-                {t(language, "noResults")}
+                {L("Aún no hay publicaciones", "No posts yet")}
+              </li>
+            )}
+            {loadingPosts && (
+              <li className="py-6 text-center text-sm text-slate-400">
+                <Loader2 className="mx-auto h-4 w-4 animate-spin" />
               </li>
             )}
           </ul>
+
+          {localPosts.length > 0 && (
+            <div className="mt-4 border-t border-slate-100 pt-3">
+              <button
+                type="button"
+                onClick={() => setShowLocal((v) => !v)}
+                className="text-xs font-semibold text-slate-500 hover:underline"
+              >
+                {showLocal ? "▾" : "▸"} {L("Borradores e historial anterior", "Drafts & earlier history")} ({localPosts.length})
+              </button>
+              {showLocal && (
+                <ul className="mt-2 divide-y divide-slate-100">
+                  {localPosts.map((p) => {
+                    const pm = (p.mediaIds || []).map((id) => mediaById.get(id)).filter(Boolean);
+                    return (
+                      <li key={p.id} className="py-2.5">
+                        <div className="mb-1 flex flex-wrap items-center gap-2">
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600">
+                            {p.status === "draft" ? t(language, "draft") : L("sin enviar por servidor", "not server-sent")}
+                          </span>
+                          <span className="text-[11px] text-slate-400">{format(new Date(p.createdAt), "MMM d, HH:mm")}</span>
+                          <button
+                            type="button"
+                            onClick={() => loadDraft(p.id)}
+                            className="ml-auto text-[11px] font-semibold text-[var(--brand)] hover:underline"
+                          >
+                            {L("Usar en el editor", "Load into composer")}
+                          </button>
+                        </div>
+                        {p.body && <p className="text-xs text-slate-600">{p.body}</p>}
+                        {pm.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
+                            {pm.map((m) => (
+                              <MediaThumb key={m!.id} asset={m!} language={language} compact />
+                            ))}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       </section>
     </div>

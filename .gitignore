@@ -11,3 +11,4 @@ preview-*.png
 !.env.example
 
 .data
+.vercel

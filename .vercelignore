@@ -3,3 +3,6 @@ node_modules
 preview-*.png
 *.zip
 .git
+.env*.local
+.data
+.vercel
