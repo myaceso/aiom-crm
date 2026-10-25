@@ -30,6 +30,7 @@ import {
   Send,
   UserCog,
   Wallet,
+  GraduationCap,
 } from "lucide-react";
 import Logo from "@/components/Logo";
 import { t, type DictKey } from "@/lib/i18n";
@@ -60,6 +61,7 @@ const secondary: NavItem[] = [
   { href: "/dashboard/sites", key: "sites", icon: Globe },
   { href: "/dashboard/reputation", key: "reputation", icon: Star },
   { href: "/dashboard/reporting", key: "reporting", icon: BarChart3 },
+  { href: "/dashboard/estudio", key: "studyGa", icon: GraduationCap },
 ];
 
 export default function Sidebar() {
