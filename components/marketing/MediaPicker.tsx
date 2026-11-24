@@ -17,6 +17,7 @@ import {
   Plus,
 } from "lucide-react";
 import clsx from "clsx";
+import { CreativeStudio } from "./CreativeStudio";
 import { t } from "@/lib/i18n";
 import type { Lang, MediaAsset } from "@/lib/types";
 import { saveMediaBlob, deleteMediaBlob } from "@/lib/mediaDb";
@@ -107,6 +108,7 @@ type Props = {
   selectedIds: string[];
   onChange: (ids: string[]) => void;
   disabled?: boolean;
+  canCreateAds?: boolean;
 };
 
 export function MediaPicker({
@@ -114,6 +116,7 @@ export function MediaPicker({
   selectedIds,
   onChange,
   disabled,
+  canCreateAds,
 }: Props) {
   const mediaAssets = useStore((s) => s.mediaAssets);
   const addMediaAsset = useStore((s) => s.addMediaAsset);
@@ -130,7 +133,7 @@ export function MediaPicker({
   const processFiles = useCallback(
     async (files: FileList | File[]) => {
       const list = Array.from(files);
-      if (!list.length) return;
+      if (!list.length) return false;
       setUploading(true);
       const added: string[] = [];
       try {
@@ -196,6 +199,7 @@ export function MediaPicker({
           onChange([...selectedIds, ...added.filter((id) => !selectedIds.includes(id))]);
           showToast(t(language, "mediaUploadOk"));
         }
+        return added.length > 0;
       } finally {
         setUploading(false);
         if (inputRef.current) inputRef.current.value = "";
@@ -247,6 +251,11 @@ export function MediaPicker({
 
   return (
     <div className="space-y-3">
+      {canCreateAds && (
+        <CreativeStudio language={language} disabled={disabled || uploading} onAttach={async (file) => {
+          if (!await processFiles([file])) throw new Error("attachment_failed");
+        }} />
+      )}
       <div className="flex items-center justify-between gap-2">
         <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
           {t(language, "mediaAttach")}
