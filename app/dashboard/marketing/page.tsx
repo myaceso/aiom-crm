@@ -473,7 +473,7 @@ export default function MarketingPage() {
             />
           </div>
 
-          <MediaPicker language={language} selectedIds={mediaIds} onChange={setMediaIds} disabled={busy} />
+          <MediaPicker language={language} selectedIds={mediaIds} onChange={setMediaIds} disabled={busy} canCreateAds />
 
           {(channels.includes("instagram") && mediaIds.length === 0) || (hasVideo && hasImage && channels.includes("facebook")) ? (
             <div className="flex items-start gap-1.5 rounded-md bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
