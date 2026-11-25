@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start -p ${PORT:-3000}",
     "lint": "next lint",
-    "test": "node --import ./lib/landing/test-register.mjs --experimental-strip-types --test lib/landing/lead.test.ts lib/landing/template.test.ts"
+    "test": "node --import ./lib/landing/test-register.mjs --experimental-strip-types --test lib/landing/lead.test.ts lib/landing/template.test.ts lib/landing/previewPick.test.ts"
   },
   "dependencies": {
     "@vercel/blob": "^2.8.0",

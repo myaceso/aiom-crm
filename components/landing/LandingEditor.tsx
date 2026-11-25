@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import FinanzasLanding from "@/components/landing/FinanzasLanding";
+import FinanzasLanding, { type PreviewPick } from "@/components/landing/FinanzasLanding";
+import { resolveInspectTarget } from "@/lib/landing/previewPick";
 import {
   LANDING_FONTS,
   blankSection,
@@ -42,19 +43,22 @@ function Field({
   value,
   onChange,
   multiline = false,
+  fieldId,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   multiline?: boolean;
+  fieldId?: string;
 }) {
+  const fieldAttr = fieldId ? { "data-field": fieldId } : {};
   return (
     <label className="block text-sm font-semibold text-slate-700">
       {label}
       {multiline ? (
-        <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={4} className={inputClass} />
+        <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={4} className={inputClass} {...fieldAttr} />
       ) : (
-        <input value={value} onChange={(e) => onChange(e.target.value)} className={inputClass} />
+        <input value={value} onChange={(e) => onChange(e.target.value)} className={inputClass} {...fieldAttr} />
       )}
     </label>
   );
@@ -67,6 +71,64 @@ export default function LandingEditor() {
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pick, setPick] = useState<(PreviewPick & { nonce: number }) | null>(null);
+  const brandRef = useRef<HTMLElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const fromPreview = useRef(false);
+
+  useEffect(() => {
+    if (fromPreview.current) {
+      fromPreview.current = false;
+      return;
+    }
+    const id = template?.sections[selected]?.id;
+    const root = previewRef.current;
+    if (!id || !root || root.getClientRects().length === 0) return;
+    const node = root.querySelector(`[data-preview-id="${CSS.escape(id)}"]`);
+    if (!(node instanceof HTMLElement)) return;
+    const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+    const top = node.getBoundingClientRect().top - root.getBoundingClientRect().top + root.scrollTop - 12;
+    root.scrollTo({ top, behavior });
+    // Only when the chosen section or the visible tab changes. Typing must not move the preview.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, tab]);
+
+  useEffect(() => {
+    if (!pick) return;
+    const root = pick.sectionId === "brand" ? brandRef.current : sectionRef.current;
+    if (!root) return;
+    const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+    root.scrollIntoView({ behavior, block: "center" });
+    root.classList.add("lp-editor-flash");
+    const timer = window.setTimeout(() => root.classList.remove("lp-editor-flash"), 1400);
+    if (pick.field) {
+      const selector = `[data-field="${CSS.escape(pick.field)}"]`;
+      const node = root.querySelector(selector);
+      if (node instanceof HTMLElement) {
+        node.focus({ preventScroll: true });
+        node.scrollIntoView({ behavior, block: "center" });
+      }
+    }
+    return () => window.clearTimeout(timer);
+  }, [pick, tab]);
+
+  function onInspect(raw: PreviewPick) {
+    if (!template) return;
+    const target = resolveInspectTarget(raw.sectionId, raw.field);
+    if (!target) return;
+    fromPreview.current = true;
+    setTab("edit");
+    if (target.panel === "section") {
+      const index = template.sections.findIndex((item) => item.id === target.sectionId);
+      if (index >= 0) setSelected(index);
+    }
+    setPick({
+      sectionId: target.panel === "brand" ? "brand" : target.sectionId,
+      field: target.field,
+      nonce: Date.now(),
+    });
+  }
 
   useEffect(() => {
     void (async () => {
@@ -136,6 +198,7 @@ export default function LandingEditor() {
 
   return (
     <div className="space-y-4">
+      <style>{`.lp-editor-flash { box-shadow: 0 0 0 3px #FFC72C; border-radius: 12px; }`}</style>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Sitios</p>
@@ -179,11 +242,11 @@ export default function LandingEditor() {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
         <div className={`space-y-4 ${tab === "preview" ? "hidden md:block" : ""}`}>
-          <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+          <section ref={brandRef} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
             <h2 className="text-sm font-semibold text-slate-800">Marca, colores y tipografía</h2>
-            <Field label="Nombre" value={template.brand} onChange={(brand) => patch({ brand })} />
-            <Field label="Zona" value={template.area} onChange={(area) => patch({ area })} />
-            <Field label="Botón del encabezado" value={template.headerCta} onChange={(headerCta) => patch({ headerCta })} />
+            <Field fieldId="brand" label="Nombre" value={template.brand} onChange={(brand) => patch({ brand })} />
+            <Field fieldId="area" label="Zona" value={template.area} onChange={(area) => patch({ area })} />
+            <Field fieldId="headerCta" label="Botón del encabezado" value={template.headerCta} onChange={(headerCta) => patch({ headerCta })} />
             <div className="grid grid-cols-3 gap-2">
               {([
                 ["accent", "Acento"],
@@ -236,10 +299,10 @@ export default function LandingEditor() {
                 <option value="800">Extra negrita</option>
               </select>
             </label>
-            <Field label="Teléfono visible" value={template.phoneDisplay} onChange={(phoneDisplay) => patch({ phoneDisplay })} />
-            <Field label="Teléfono (solo dígitos, vacío = sin enlace)" value={template.phoneE164} onChange={(phoneE164) => patch({ phoneE164 })} />
-            <Field label="WhatsApp visible" value={template.whatsappDisplay} onChange={(whatsappDisplay) => patch({ whatsappDisplay })} />
-            <Field label="WhatsApp (solo dígitos, vacío = sin enlace)" value={template.whatsappE164} onChange={(whatsappE164) => patch({ whatsappE164 })} />
+            <Field fieldId="phoneDisplay" label="Teléfono visible" value={template.phoneDisplay} onChange={(phoneDisplay) => patch({ phoneDisplay })} />
+            <Field fieldId="phoneE164" label="Teléfono (solo dígitos, vacío = sin enlace)" value={template.phoneE164} onChange={(phoneE164) => patch({ phoneE164 })} />
+            <Field fieldId="whatsappDisplay" label="WhatsApp visible" value={template.whatsappDisplay} onChange={(whatsappDisplay) => patch({ whatsappDisplay })} />
+            <Field fieldId="whatsappE164" label="WhatsApp (solo dígitos, vacío = sin enlace)" value={template.whatsappE164} onChange={(whatsappE164) => patch({ whatsappE164 })} />
             <p className="text-xs leading-5 text-slate-500">Las imágenes se pegan como URL https. No subas un archivo aquí: el almacén de medios del CRM es el de Marketing.</p>
           </section>
 
@@ -279,7 +342,7 @@ export default function LandingEditor() {
           </section>
 
           {section && (
-            <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+            <section ref={sectionRef} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
               <h2 className="text-sm font-semibold text-slate-800">Editar {TYPE_LABEL[section.type]}</h2>
               <SectionFields section={section} onChange={(next) => patchSection(selected, next)} />
               {section.type === "contact" && (
@@ -290,9 +353,11 @@ export default function LandingEditor() {
         </div>
 
         <div className={`${tab === "edit" ? "hidden md:block" : ""} overflow-hidden rounded-xl border border-slate-200 bg-slate-100`}>
-          <p className="border-b border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Vista previa en vivo</p>
-          <div className="max-h-[80vh] overflow-auto">
-            <FinanzasLanding template={template} embedded />
+          <p className="border-b border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Vista previa en vivo · haz clic en una sección para editarla
+          </p>
+          <div ref={previewRef} className="max-h-[80vh] overflow-auto">
+            <FinanzasLanding template={template} embedded onInspect={onInspect} />
           </div>
         </div>
       </div>
@@ -304,28 +369,28 @@ function SectionFields({ section, onChange }: { section: LandingSection; onChang
   if (section.type === "hero") {
     return (
       <>
-        <Field label="Antetítulo" value={section.eyebrow} onChange={(eyebrow) => onChange({ ...section, eyebrow })} />
-        <Field label="Titular" value={section.title} onChange={(title) => onChange({ ...section, title })} />
-        <Field label="Palabra resaltada (opcional, debe estar en el titular)" value={section.highlight} onChange={(highlight) => onChange({ ...section, highlight })} />
-        <Field label="Texto" value={section.subtitle} onChange={(subtitle) => onChange({ ...section, subtitle })} multiline />
-        <Field label="Botón principal" value={section.primaryCta} onChange={(primaryCta) => onChange({ ...section, primaryCta })} />
-        <Field label="Botón secundario" value={section.secondaryCta} onChange={(secondaryCta) => onChange({ ...section, secondaryCta })} />
+        <Field fieldId="eyebrow" label="Antetítulo" value={section.eyebrow} onChange={(eyebrow) => onChange({ ...section, eyebrow })} />
+        <Field fieldId="title" label="Titular" value={section.title} onChange={(title) => onChange({ ...section, title })} />
+        <Field fieldId="highlight" label="Palabra resaltada (opcional, debe estar en el titular)" value={section.highlight} onChange={(highlight) => onChange({ ...section, highlight })} />
+        <Field fieldId="subtitle" label="Texto" value={section.subtitle} onChange={(subtitle) => onChange({ ...section, subtitle })} multiline />
+        <Field fieldId="primaryCta" label="Botón principal" value={section.primaryCta} onChange={(primaryCta) => onChange({ ...section, primaryCta })} />
+        <Field fieldId="secondaryCta" label="Botón secundario" value={section.secondaryCta} onChange={(secondaryCta) => onChange({ ...section, secondaryCta })} />
       </>
     );
   }
   if (section.type === "services") {
     return (
       <>
-        <Field label="Título" value={section.heading} onChange={(heading) => onChange({ ...section, heading })} />
-        <Field label="Introducción" value={section.intro} onChange={(intro) => onChange({ ...section, intro })} multiline />
+        <Field fieldId="heading" label="Título" value={section.heading} onChange={(heading) => onChange({ ...section, heading })} />
+        <Field fieldId="intro" label="Introducción" value={section.intro} onChange={(intro) => onChange({ ...section, intro })} multiline />
         {section.items.map((item, index) => (
           <div key={item.id} className="space-y-2 rounded-lg border border-slate-100 p-3">
-            <Field label="Servicio" value={item.title} onChange={(title) => {
+            <Field fieldId={`svc:${item.id}:title`} label="Servicio" value={item.title} onChange={(title) => {
               const items = section.items.slice();
               items[index] = { ...item, title };
               onChange({ ...section, items });
             }} />
-            <Field label="Descripción" value={item.summary} onChange={(summary) => {
+            <Field fieldId={`svc:${item.id}:summary`} label="Descripción" value={item.summary} onChange={(summary) => {
               const items = section.items.slice();
               items[index] = { ...item, summary };
               onChange({ ...section, items });
@@ -340,15 +405,15 @@ function SectionFields({ section, onChange }: { section: LandingSection; onChang
   if (section.type === "benefits") {
     return (
       <>
-        <Field label="Título" value={section.heading} onChange={(heading) => onChange({ ...section, heading })} />
+        <Field fieldId="heading" label="Título" value={section.heading} onChange={(heading) => onChange({ ...section, heading })} />
         {section.items.map((item, index) => (
           <div key={item.id} className="space-y-2 rounded-lg border border-slate-100 p-3">
-            <Field label="Beneficio" value={item.title} onChange={(title) => {
+            <Field fieldId={`ben:${item.id}:title`} label="Beneficio" value={item.title} onChange={(title) => {
               const items = section.items.slice();
               items[index] = { ...item, title };
               onChange({ ...section, items });
             }} />
-            <Field label="Texto" value={item.body} onChange={(body) => {
+            <Field fieldId={`ben:${item.id}:body`} label="Texto" value={item.body} onChange={(body) => {
               const items = section.items.slice();
               items[index] = { ...item, body };
               onChange({ ...section, items });
@@ -363,15 +428,15 @@ function SectionFields({ section, onChange }: { section: LandingSection; onChang
   if (section.type === "faq") {
     return (
       <>
-        <Field label="Título" value={section.heading} onChange={(heading) => onChange({ ...section, heading })} />
+        <Field fieldId="heading" label="Título" value={section.heading} onChange={(heading) => onChange({ ...section, heading })} />
         {section.items.map((item, index) => (
           <div key={item.id} className="space-y-2 rounded-lg border border-slate-100 p-3">
-            <Field label="Pregunta" value={item.q} onChange={(q) => {
+            <Field fieldId={`faq:${item.id}:q`} label="Pregunta" value={item.q} onChange={(q) => {
               const items = section.items.slice();
               items[index] = { ...item, q };
               onChange({ ...section, items });
             }} />
-            <Field label="Respuesta" value={item.a} onChange={(a) => {
+            <Field fieldId={`faq:${item.id}:a`} label="Respuesta" value={item.a} onChange={(a) => {
               const items = section.items.slice();
               items[index] = { ...item, a };
               onChange({ ...section, items });
@@ -386,34 +451,34 @@ function SectionFields({ section, onChange }: { section: LandingSection; onChang
   if (section.type === "contact") {
     return (
       <>
-        <Field label="Título" value={section.heading} onChange={(heading) => onChange({ ...section, heading })} />
-        <Field label="Texto" value={section.intro} onChange={(intro) => onChange({ ...section, intro })} multiline />
+        <Field fieldId="heading" label="Título" value={section.heading} onChange={(heading) => onChange({ ...section, heading })} />
+        <Field fieldId="intro" label="Texto" value={section.intro} onChange={(intro) => onChange({ ...section, intro })} multiline />
       </>
     );
   }
   if (section.type === "text") {
     return (
       <>
-        <Field label="Título" value={section.heading} onChange={(heading) => onChange({ ...section, heading })} />
-        <Field label="Texto" value={section.body} onChange={(body) => onChange({ ...section, body })} multiline />
+        <Field fieldId="heading" label="Título" value={section.heading} onChange={(heading) => onChange({ ...section, heading })} />
+        <Field fieldId="body" label="Texto" value={section.body} onChange={(body) => onChange({ ...section, body })} multiline />
       </>
     );
   }
   if (section.type === "image") {
     return (
       <>
-        <Field label="URL https de la imagen" value={section.url} onChange={(url) => onChange({ ...section, url })} />
-        <Field label="Texto alternativo" value={section.alt} onChange={(alt) => onChange({ ...section, alt })} />
-        <Field label="Pie de foto" value={section.caption} onChange={(caption) => onChange({ ...section, caption })} />
+        <Field fieldId="url" label="URL https de la imagen" value={section.url} onChange={(url) => onChange({ ...section, url })} />
+        <Field fieldId="alt" label="Texto alternativo" value={section.alt} onChange={(alt) => onChange({ ...section, alt })} />
+        <Field fieldId="caption" label="Pie de foto" value={section.caption} onChange={(caption) => onChange({ ...section, caption })} />
       </>
     );
   }
   return (
     <>
-      <Field label="Título" value={section.heading} onChange={(heading) => onChange({ ...section, heading })} />
-      <Field label="Texto" value={section.body} onChange={(body) => onChange({ ...section, body })} multiline />
-      <Field label="Texto del botón" value={section.label} onChange={(label) => onChange({ ...section, label })} />
-      <Field label="Enlace (#contacto, https://…)" value={section.href} onChange={(href) => onChange({ ...section, href })} />
+      <Field fieldId="heading" label="Título" value={section.heading} onChange={(heading) => onChange({ ...section, heading })} />
+      <Field fieldId="body" label="Texto" value={section.body} onChange={(body) => onChange({ ...section, body })} multiline />
+      <Field fieldId="label" label="Texto del botón" value={section.label} onChange={(label) => onChange({ ...section, label })} />
+      <Field fieldId="href" label="Enlace (#contacto, https://…)" value={section.href} onChange={(href) => onChange({ ...section, href })} />
     </>
   );
 }
