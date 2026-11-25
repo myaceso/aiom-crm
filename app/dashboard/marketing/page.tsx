@@ -40,6 +40,7 @@ import { ensureCloudMedia } from "@/lib/mediaCloud";
 import { ingestMediaFile } from "@/lib/attachMedia";
 import type { CreativeAsset } from "@/lib/creative/types";
 import { normalizeProfileUrl } from "@/lib/social";
+import { BufferPanel } from "@/components/marketing/BufferPanel";
 
 const NETWORK_ICONS: Record<SocialNetworkId, typeof Facebook> = {
   facebook: Facebook,
@@ -377,7 +378,10 @@ export default function MarketingPage() {
         <div>
           <h1 className="text-xl font-semibold text-slate-800">{t(language, "marketing")}</h1>
           <p className="text-sm text-slate-500">
-            {L("Publica y programa en Facebook e Instagram automáticamente", "Publish and schedule to Facebook & Instagram automatically")}
+            {L(
+              "Publica en Facebook e Instagram, y programa Buffer cada día",
+              "Publish to Facebook & Instagram, and schedule Buffer every day"
+            )}
           </p>
         </div>
         <Link
@@ -819,6 +823,8 @@ export default function MarketingPage() {
           )}
         </div>
       </section>
+
+      <BufferPanel />
     </div>
   );
 }

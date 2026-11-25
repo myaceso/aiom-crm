@@ -12,6 +12,7 @@ import type {
   EmailTemplate,
   Integrations,
 } from "./types";
+import { blankBufferIntegration, normalizeBufferIntegration } from "./buffer/model";
 
 const now = Date.now();
 const daysAgo = (d: number, h = 10) =>
@@ -307,6 +308,7 @@ export const defaultIntegrations: Integrations = {
     botToken: "",
     defaultChatId: "",
   },
+  buffer: blankBufferIntegration(),
   creative: {
     connected: false,
     openaiApiKey: "",
@@ -321,6 +323,7 @@ export function normalizeIntegrations(raw?: Partial<Integrations> | null): Integ
     email: { ...defaultIntegrations.email, ...src.email },
     whatsapp: { ...defaultIntegrations.whatsapp, ...src.whatsapp },
     telegram: { ...defaultIntegrations.telegram, ...src.telegram },
+    buffer: normalizeBufferIntegration(src.buffer),
     creative: { ...defaultIntegrations.creative, ...src.creative },
   };
 }

@@ -24,6 +24,7 @@ import type {
   EmailIntegration,
   WhatsAppIntegration,
   TelegramIntegration,
+  BufferIntegration,
   CreativeIntegration,
   MessagingSend,
   SafeUser,
@@ -47,6 +48,7 @@ import {
   defaultIntegrations,
   normalizeIntegrations,
 } from "@/lib/seed";
+import { blankBufferIntegration } from "@/lib/buffer/model";
 import {
   buildConnectedSocial,
   mergeSocialConnections,
@@ -179,6 +181,8 @@ type Store = {
   disconnectWhatsApp: () => void;
   connectTelegram: (data: Omit<TelegramIntegration, "connected">) => void;
   disconnectTelegram: () => void;
+  connectBuffer: (data: Omit<BufferIntegration, "connected">) => void;
+  disconnectBuffer: () => void;
   connectCreative: (data: Omit<CreativeIntegration, "connected">) => void;
   disconnectCreative: () => void;
   messagingSends: MessagingSend[];
@@ -829,10 +833,24 @@ export const useStore = create<Store>()(
             telegram: { ...defaultIntegrations.telegram },
           },
         })),
+      connectBuffer: (data) =>
+        set((s) => ({
+          integrations: {
+            ...normalizeIntegrations(s.integrations),
+            buffer: { connected: true, ...data },
+          },
+        })),
+      disconnectBuffer: () =>
+        set((s) => ({
+          integrations: {
+            ...normalizeIntegrations(s.integrations),
+            buffer: blankBufferIntegration(),
+          },
+        })),
       connectCreative: (data) =>
         set((s) => ({
           integrations: {
-            ...s.integrations,
+            ...normalizeIntegrations(s.integrations),
             creative: {
               connected: true,
               openaiApiKey: data.openaiApiKey.trim(),
@@ -843,7 +861,7 @@ export const useStore = create<Store>()(
       disconnectCreative: () =>
         set((s) => ({
           integrations: {
-            ...s.integrations,
+            ...normalizeIntegrations(s.integrations),
             creative: { ...defaultIntegrations.creative },
           },
         })),
@@ -924,6 +942,7 @@ export const useStore = create<Store>()(
           !s.integrations?.email ||
           !s.integrations?.whatsapp ||
           !s.integrations?.telegram ||
+          !s.integrations?.buffer ||
           !s.integrations?.creative
         ) {
           patch.integrations = normalizeIntegrations(s.integrations);

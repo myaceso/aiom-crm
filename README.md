@@ -83,6 +83,39 @@ Everything runs server-side, so scheduled posts publish even with no browser ope
 | `META_APP_ID`, `META_APP_SECRET` | optional | Enables the in-app "convert to permanent Page token" helper and token debug info |
 | `META_GRAPH_VERSION` | optional | Defaults to `v26.0` |
 
+## Buffer (Marketing → cola diaria)
+
+Buffer's current API is GraphQL at `https://api.buffer.com` (the old REST API at `api.bufferapp.com` is retired). Auth is `Authorization: Bearer`.
+
+- **Connect:** Integraciones → tarjeta Buffer. Paste a personal API key, use `BUFFER_API_KEY`, or (if an app client is configured) **Conectar con Buffer** (OAuth 2.0 + PKCE). Then pick the channels to post to.
+- **Send:** Marketing → *Buffer*. Text plus gallery images/videos (public HTTPS Blob URLs) go to the Buffer queue (`addToQueue`), an exact time (`customScheduled`), or now (`shareNow`). One Buffer post is created per channel.
+- **Every day:** the same card stores times, timezone, channels, and a content source (drafts, gallery, or drafts then gallery). Optional AI captions use the existing `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`. The existing cron `GET /api/cron/publish` (every 5 minutes) also runs the Buffer pass, so a slot fires within about 5 minutes after its local time. Each slot sends one piece and will not repeat the same draft/asset until **Reiniciar cola usada**. History and errors are in Spanish on that card.
+- **Storage:** connection, schedule and the last 200 send logs live in KV/Postgres/local at `enone:buffer:cfg:{userId}`. OAuth refresh tokens stay there (not in the browser CRM blob). A copy of the public connection (and the API key, same as other Integraciones secrets) is synced in CRM state.
+- **Dev without Buffer:** `BUFFER_MOCK=1` uses an in-memory client. `npx tsx --test lib/buffer/e2e.test.ts` runs the mocked flow.
+
+### Env vars
+| Var | Required | Notes |
+| --- | --- | --- |
+| `BUFFER_API_KEY` | no | Server fallback key. Users can still paste their own in Integraciones |
+| `BUFFER_CLIENT_ID`, `BUFFER_CLIENT_SECRET` | no | Confidential OAuth app client. Enables "Conectar con Buffer" |
+| `BUFFER_OAUTH_REDIRECT_URI` | no | Override. Default is the request host + `/api/buffer/oauth/callback` |
+| `BUFFER_MOCK` | no | `1` only on a local/dev server |
+
+### What you set up in Buffer
+1. A Buffer account on any current plan, including Free (1 API key, 1 app client, tighter rate limits). Connect the social profiles inside Buffer and, for queue mode, set each channel's posting schedule. Locked channels (over the plan's profile limit) cannot be posted to.
+2. **API key (usual path):** Buffer → Settings → API → create a key → Integraciones, or set `BUFFER_API_KEY` on Vercel and click *Usar clave del servidor*.
+3. **OAuth (optional, one app for every enone user):** same Settings → API page → create a confidential app client. Register redirect `https://enone.app/api/buffer/oauth/callback` (and `https://www.enone.app/...` if that host is used). Set `BUFFER_CLIENT_ID` and `BUFFER_CLIENT_SECRET`. The app requests `posts:write`, `posts:read`, `account:read`, `offline_access`.
+4. `CRON_SECRET` is already required. Hobby cron plans that only fire once a day will deliver that day's slots late, in one run, instead of at the chosen minute.
+
+### Buffer API limits that affect this feature
+- No file upload. Media must be a public HTTPS URL that stays reachable until Buffer publishes (Vercel Blob URLs qualify; expiring signed URLs do not).
+- One `createPost` per channel. Images: up to 10. A video is sent alone.
+- `dueAt` must be in the future; a late cron moves it forward a couple of minutes.
+- Instagram personal profiles and Facebook groups only support `notification` (a reminder), not automatic publishing. The client retries once in that mode and says so in the history.
+- Queue mode follows Buffer's own schedule. A paused queue accepts the post but will not publish until resumed. A full queue returns an error.
+- Free-plan rate limits are shared by all of that account's API keys (150 / 15 min, 600 / 24 h, and a 30-day cap per channel). Refresh tokens are single-use.
+- The API publishes through Buffer, not directly to the networks, and does not bypass a channel that requires approval.
+
 ### Meta setup (one time)
 1. Instagram account → **Professional** (Business or Creator) and **linked to the Facebook Page** (Meta Business Suite → Settings → Accounts → Instagram accounts, or Page settings → Linked accounts).
 2. developers.facebook.com → **Create app** → type *Business* → add *Facebook Login for Business* and *Instagram Graph API* (Instagram API with Facebook Login).
