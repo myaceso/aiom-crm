@@ -188,7 +188,8 @@ export async function runDailyPass(deps: DailyDeps): Promise<{ config: BufferCon
     let text = item.text;
     let ai = false;
     let warning = item.warning;
-    if (schedule.aiCaptions) {
+    const savedCaption = item.kind === "asset" && item.text.trim();
+    if (schedule.aiCaptions && !savedCaption) {
       try {
         const cap = await deps.caption({ brief: schedule.aiBrief, text, names: item.names });
         if (cap.text.trim()) text = cap.text.trim();

@@ -8,6 +8,8 @@ import {
   galleryFor,
   parseGenerateBody,
   readGeneration,
+  refreshCreativeCopy,
+  saveCreativeCopy,
   startGeneration,
 } from "@/lib/creative/service";
 
@@ -62,11 +64,38 @@ export async function POST(req: Request) {
     return fail(415, "invalid_input", "Envía la solicitud en JSON.", "Send the request as JSON.");
   }
   const body = await req.json().catch(() => null);
+  const keys = await resolveCreativeKeys(auth.user.id);
+  const lang = body && typeof body === "object" && (body as { lang?: string }).lang === "en" ? "en" : "es";
   try {
+    if (body && typeof body === "object" && (body as { action?: string }).action === "copy") {
+      const id = String((body as { id?: string }).id || "");
+      if (!/^[0-9a-f-]{36}$/i.test(id)) {
+        return fail(400, "invalid_input", "Falta la creación.", "The creation is missing.");
+      }
+      const refreshed = await refreshCreativeCopy(auth.user.id, id, keys, lang);
+      return NextResponse.json(refreshed);
+    }
     const input = parseGenerateBody(body);
-    const keys = await resolveCreativeKeys(auth.user.id);
     const result = await startGeneration(auth.user.id, input, keys);
     return NextResponse.json(result);
+  } catch (error) {
+    return fromError(error);
+  }
+}
+
+export async function PATCH(req: Request) {
+  const auth = await requireUser(["marketing"]);
+  if (auth.error) return auth.error;
+  const body = await req.json().catch(() => null);
+  const id = body && typeof body.id === "string" ? body.id : "";
+  if (!/^[0-9a-f-]{36}$/i.test(id)) {
+    return fail(400, "invalid_input", "Falta la creación.", "The creation is missing.");
+  }
+  const caption = typeof body?.caption === "string" ? body.caption : "";
+  const hashtags = Array.isArray(body?.hashtags) ? body.hashtags.join(" ") : typeof body?.hashtags === "string" ? body.hashtags : "";
+  try {
+    const asset = await saveCreativeCopy(auth.user.id, id, caption, hashtags);
+    return NextResponse.json({ asset });
   } catch (error) {
     return fromError(error);
   }

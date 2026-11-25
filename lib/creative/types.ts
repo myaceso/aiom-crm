@@ -23,6 +23,11 @@ export type CreativeAsset = {
   size: number;
   provider: CreativeProviderId;
   createdAt: string;
+  /** Viral caption stored with the file. Empty when the text model was not available. */
+  caption: string;
+  hashtags: string[];
+  /** Variations generated from the same idea share this id. */
+  groupId: string;
 };
 
 export type StoredCreativeAsset = CreativeAsset & {
@@ -47,6 +52,9 @@ export type CreativeJob = {
   readyAt?: number;
   assetId?: string;
   error?: string;
+  caption?: string;
+  hashtags?: string[];
+  groupId?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -56,10 +64,12 @@ export type Bilingual = { es: string; en: string };
 export type CreativeConfig = {
   image: boolean;
   video: boolean;
+  copy: boolean;
   mock: boolean;
   messages: {
     image: Bilingual | null;
     video: Bilingual | null;
+    copy: Bilingual | null;
     mock: Bilingual | null;
   };
 };

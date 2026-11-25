@@ -1,5 +1,6 @@
+import { isAiConfigured } from "@/lib/ai";
 import { getCrmState } from "@/lib/crmDb";
-import { missingImageKey, missingVideoKey, mockModeNote } from "./messages";
+import { missingCopyKey, missingImageKey, missingVideoKey, mockModeNote } from "./messages";
 import type { CreativeConfig } from "./types";
 
 function clean(value: string | undefined): string {
@@ -24,6 +25,7 @@ export async function resolveCreativeKeys(userId: string): Promise<CreativeKeys>
   const fal = clean(process.env.FAL_KEY) || clean(saved?.falKey);
   const imageReady = mock || !!openai;
   const videoReady = mock || !!fal;
+  const copyReady = mock || isAiConfigured();
   return {
     mock,
     openai,
@@ -33,10 +35,12 @@ export async function resolveCreativeKeys(userId: string): Promise<CreativeKeys>
     config: {
       image: imageReady,
       video: videoReady,
+      copy: copyReady,
       mock,
       messages: {
         image: imageReady ? null : missingImageKey,
         video: videoReady ? null : missingVideoKey,
+        copy: copyReady ? null : missingCopyKey,
         mock: mock ? mockModeNote : null,
       },
     },

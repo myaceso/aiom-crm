@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { MediaPicker } from "@/components/marketing/MediaPicker";
 import { serviceLabel } from "@/lib/buffer/model";
+import { postText } from "@/lib/creative/copy";
 import { ensureCloudMedia } from "@/lib/mediaCloud";
 import type { BufferChannelInfo } from "@/lib/types";
 import { useStore } from "@/store/useStore";
@@ -50,6 +51,7 @@ type StudioItem = {
   name: string;
   url: string;
   mime: string;
+  text: string;
 };
 
 const ZONES = [
@@ -134,12 +136,13 @@ export function BufferPanel() {
       setStudio(
         items
           .filter((item: StudioItem) => item && (item.kind === "image" || item.kind === "video") && typeof item.url === "string")
-          .map((item: StudioItem) => ({
+          .map((item: StudioItem & { caption?: string; hashtags?: string[] }) => ({
             id: String(item.id),
             kind: item.kind,
             name: String(item.name || "estudio"),
             url: String(item.url),
             mime: String(item.mime || ""),
+            text: postText(item.caption, item.hashtags),
           }))
       );
     }
@@ -155,6 +158,12 @@ export function BufferPanel() {
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  useEffect(() => {
+    const refresh = () => void load();
+    window.addEventListener("enone-creative-updated", refresh);
+    return () => window.removeEventListener("enone-creative-updated", refresh);
   }, [load]);
 
   function toggleChannel(id: string) {
@@ -339,7 +348,11 @@ export function BufferPanel() {
                   key={item.id}
                   type="button"
                   disabled={busy}
-                  onClick={() => setStudioIds((ids) => (ids.includes(item.id) ? ids.filter((id) => id !== item.id) : [...ids, item.id]))}
+                  onClick={() => {
+                    const turningOn = !studioIds.includes(item.id);
+                    setStudioIds((ids) => (ids.includes(item.id) ? ids.filter((id) => id !== item.id) : [...ids, item.id]));
+                    if (turningOn && item.text) setText(item.text);
+                  }}
                   className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${on ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 text-slate-600"}`}
                 >
                   {item.kind === "video" ? "Video" : "Imagen"} · {item.name}

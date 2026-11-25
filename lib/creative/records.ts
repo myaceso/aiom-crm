@@ -28,6 +28,18 @@ export async function listAssets(userId: string): Promise<StoredCreativeAsset[]>
     .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
 }
 
+export async function patchAsset(
+  userId: string,
+  id: string,
+  patch: Pick<StoredCreativeAsset, "caption" | "hashtags">
+): Promise<StoredCreativeAsset | null> {
+  const asset = await getAsset(userId, id);
+  if (!asset) return null;
+  const next = { ...asset, caption: patch.caption, hashtags: patch.hashtags };
+  await setJson(assetKey(userId, id), next);
+  return next;
+}
+
 export async function removeAssetRecord(userId: string, id: string): Promise<StoredCreativeAsset | null> {
   const asset = await getAsset(userId, id);
   await delKey(assetKey(userId, id));
