@@ -45,6 +45,7 @@ export function SendToBufferDialog({
   const [channels, setChannels] = useState<string[]>([]);
   const [text, setText] = useState("");
   const [mode, setMode] = useState<"queue" | "now" | "custom">("queue");
+  const [igType, setIgType] = useState<"post" | "story" | "reel">("post");
   const [when, setWhen] = useState("");
   const [daily, setDaily] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -87,6 +88,7 @@ export function SendToBufferDialog({
   useEffect(() => {
     if (!asset) return;
     setText(postText(asset.caption, asset.hashtags));
+    setIgType(asset.kind === "video" ? "reel" : "post");
     setMode("queue");
     setWhen("");
     setDaily(false);
@@ -152,6 +154,7 @@ export function SendToBufferDialog({
           media: [{ url: asset!.url, kind: asset!.kind, name: asset!.name }],
           channelIds: channels,
           mode,
+          instagramType: igType,
           dueAt: mode === "custom" ? new Date(when).toISOString() : null,
           addToDaily: daily,
           creativeId: asset!.id,
@@ -277,6 +280,30 @@ export function SendToBufferDialog({
                 </label>
               ))}
             </div>
+            {list.some((channel) => channels.includes(channel.id) && channel.service.toLowerCase() === "instagram") && (
+              <div>
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{L("Tipo en Instagram", "Instagram type")}</p>
+                <div className="flex flex-wrap gap-2 text-sm">
+                  {([
+                    ["post", "Post"],
+                    ["story", L("Historia", "Story")],
+                    ["reel", "Reel"],
+                  ] as const).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setIgType(id)}
+                      className={`rounded-full border px-3 py-1 ${igType === id ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200"}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  {L("Un video suelto se publica como Reel. Historia no va al feed.", "A single video is published as a Reel. Stories are not shared to the feed.")}
+                </p>
+              </div>
+            )}
             {mode === "custom" && (
               <input type="datetime-local" className="rounded-md border border-slate-200 px-2 py-2 text-sm" min={toLocalInput(new Date())} value={when} onChange={(event) => setWhen(event.target.value)} />
             )}

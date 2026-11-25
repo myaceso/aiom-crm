@@ -33,6 +33,8 @@ export type BufferDailySchedule = {
   usedAssetIds: string[];
   /** Creative-studio asset ids the owner asked to send on the next daily slots. */
   pinnedAssetIds: string[];
+  /** Instagram placement chosen when that creation was pinned. */
+  pinnedPlacements: Record<string, "post" | "story" | "reel">;
   /** slot HH:mm → local date YYYY-MM-DD already delivered */
   fired: Record<string, string>;
   /** slot HH:mm → local date we already logged a waiting error */
@@ -96,6 +98,7 @@ export function blankSchedule(): BufferDailySchedule {
     usedDraftIds: [],
     usedAssetIds: [],
     pinnedAssetIds: [],
+    pinnedPlacements: {},
     fired: {},
     noted: {},
     attempts: {},

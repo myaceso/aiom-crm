@@ -113,9 +113,16 @@ function byCreated(a: { createdAt: string }, b: { createdAt: string }) {
   return +new Date(a.createdAt) - +new Date(b.createdAt);
 }
 
-export function pinDailyAsset(schedule: BufferDailySchedule, assetId: string, channelIds: string[]): BufferDailySchedule {
+export function pinDailyAsset(
+  schedule: BufferDailySchedule,
+  assetId: string,
+  channelIds: string[],
+  instagramType?: "post" | "story" | "reel"
+): BufferDailySchedule {
   const id = assetId.replace(/^creative:/, "").trim();
   const pinned = schedule.pinnedAssetIds.includes(id) ? schedule.pinnedAssetIds : [...schedule.pinnedAssetIds, id].slice(0, 40);
+  const placements = { ...(schedule.pinnedPlacements || {}) };
+  if (instagramType) placements[id] = instagramType;
   return {
     ...schedule,
     enabled: true,
@@ -123,6 +130,7 @@ export function pinDailyAsset(schedule: BufferDailySchedule, assetId: string, ch
     source: schedule.source === "drafts" ? "both" : schedule.source,
     channelIds: channelIds.length ? channelIds : schedule.channelIds,
     pinnedAssetIds: pinned,
+    pinnedPlacements: placements,
   };
 }
 
