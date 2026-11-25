@@ -307,7 +307,23 @@ export const defaultIntegrations: Integrations = {
     botToken: "",
     defaultChatId: "",
   },
+  creative: {
+    connected: false,
+    openaiApiKey: "",
+    falKey: "",
+  },
 };
+
+export function normalizeIntegrations(raw?: Partial<Integrations> | null): Integrations {
+  const src = raw || {};
+  return {
+    sms: { ...defaultIntegrations.sms, ...src.sms },
+    email: { ...defaultIntegrations.email, ...src.email },
+    whatsapp: { ...defaultIntegrations.whatsapp, ...src.whatsapp },
+    telegram: { ...defaultIntegrations.telegram, ...src.telegram },
+    creative: { ...defaultIntegrations.creative, ...src.creative },
+  };
+}
 
 export function createSeedSocialPosts(): SocialPost[] {
   return [

@@ -38,6 +38,19 @@ See `.env.example` for `AUTH_SECRET`, `KV_*`, `RESEND_API_KEY`, `EMAIL_FROM`, `A
 - Without keys, API returns `ai_not_configured` (503) and the UI shows Vercel setup instructions
 - Module permission: `aiAssistants`
 
+## Marketing creative studio (AI images and video)
+UI: `/dashboard/marketing` (section **Estudio creativo**) and keys in `/dashboard/integrations`.
+
+- **Images:** OpenAI Images API (`gpt-image-2.6-flare` by default). The request finishes inside `POST /api/marketing/creative` (function `maxDuration` 60s).
+- **Videos:** fal.ai queue, Kling 4 (`kling/v4/text-to-video` and `kling/v4/image-to-video`). `POST` only submits the job. The browser polls `GET /api/marketing/creative?job=` until the file is saved. A reference JPEG is optional (image-to-video). Duration is 5 or 10 seconds. Default resolution is 720p (~$0.16/sec, about $0.80 for 5s).
+- **Gallery:** each result is stored in Vercel Blob when `BLOB_READ_WRITE_TOKEN` is set, plus a per-user record in KV/Postgres (`enone:creative:asset:{userId}:{id}`). Without Blob (local dev) files live under `.data/creative` and are served by `GET /api/marketing/creative/file/{id}` after the marketing session check. Download and **Usar en la publicación** attach the file to the existing composer so `/api/social/posts` and `/api/cron/publish` can send it to Facebook/Instagram.
+- **Keys:** `OPENAI_API_KEY` and `FAL_KEY` on Vercel, or the same values saved in Integraciones → Estudio creativo (stored in the account CRM state, same pattern as SMS/email). Env vars win when both are set. If a key is missing, Marketing shows which one to add.
+- **Swap providers:** `lib/creative/providers/index.ts`.
+- **Demo without keys:** `CREATIVE_MOCK=1` returns a local image and a short MP4. Do not enable it in production.
+- Optional: `OPENAI_IMAGE_MODEL`, `OPENAI_IMAGE_QUALITY`, `FAL_TEXT_TO_VIDEO_MODEL`, `FAL_IMAGE_TO_VIDEO_MODEL`, `FAL_VIDEO_RESOLUTION` (`720p`, `1080p`, or `4k`).
+- Accounts to create: [platform.openai.com](https://platform.openai.com) (API key; verify the org if image generation is blocked) and [fal.ai](https://fal.ai) (Dashboard → Keys).
+- Auth: marketing permission for generate/gallery; integrations or marketing permission to test a key.
+
 ## Facebook + Instagram auto-publishing (Marketing)
 **Flow:** Marketing → compose → choose Facebook / Instagram / both → *Publicar ahora* or *Programar*.
 Everything runs server-side, so scheduled posts publish even with no browser open.

@@ -35,7 +35,10 @@ import {
   MediaThumb,
   useMediaPreviewHydration,
 } from "@/components/marketing/MediaPicker";
+import { CreativeStudio } from "@/components/marketing/CreativeStudio";
 import { ensureCloudMedia } from "@/lib/mediaCloud";
+import { ingestMediaFile } from "@/lib/attachMedia";
+import type { CreativeAsset } from "@/lib/creative/types";
 import { normalizeProfileUrl } from "@/lib/social";
 
 const NETWORK_ICONS: Record<SocialNetworkId, typeof Facebook> = {
@@ -72,6 +75,7 @@ export default function MarketingPage() {
   const localPosts = useStore((s) => s.socialPosts);
   const mediaAssets = useStore((s) => s.mediaAssets);
   const addSocialPost = useStore((s) => s.addSocialPost);
+  const addMediaAsset = useStore((s) => s.addMediaAsset);
   const setMediaCloud = useStore((s) => s.setMediaCloud);
   const userId = useStore((s) => s.session?.userId || "");
   const showToast = useStore((s) => s.showToast);
@@ -133,6 +137,50 @@ export default function MarketingPage() {
       return;
     }
     setChannels((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  async function useGenerated(item: { file?: File; asset?: CreativeAsset }) {
+    const attached = (id: string) => {
+      setMediaIds((ids) => (ids.includes(id) ? ids : [...ids, id]));
+      showToast(L("Listo en el compositor. Elige la red y publica o programa.", "Added to the composer. Pick a network, then publish or schedule."));
+      document.getElementById("post-composer")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    if (item.asset && item.asset.url.startsWith("https://") && !item.file) {
+      const found = mediaAssets.find((m) => m.url === item.asset!.url);
+      const id = found?.id || `ai${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36)}`;
+      if (!found) {
+        addMediaAsset({
+          id,
+          kind: item.asset.kind,
+          name: item.asset.name,
+          size: item.asset.size,
+          mime: item.asset.mime,
+          createdAt: item.asset.createdAt,
+          url: item.asset.url,
+          previewUrl: item.asset.kind === "image" ? item.asset.url : undefined,
+          durationSec: item.asset.durationSec,
+        });
+      }
+      attached(id);
+      return;
+    }
+    let file = item.file;
+    if (!file && item.asset) {
+      const response = await fetch(item.asset.url, { credentials: "include" });
+      if (!response.ok) throw new Error("fetch");
+      const blob = await response.blob();
+      file = new File([blob], item.asset.name, { type: item.asset.mime || blob.type });
+    }
+    if (!file) throw new Error("empty");
+    const ingested = await ingestMediaFile(file, userId);
+    if (!ingested.ok) throw new Error(ingested.reason);
+    addMediaAsset(ingested.asset);
+    if (ingested.cloudError) {
+      showToast(
+        `${L("No se pudo subir a la nube (se reintentará al publicar)", "Cloud upload failed (will retry on publish)")}: ${ingested.cloudError}`
+      );
+    }
+    attached(ingested.asset.id);
   }
 
   function resetComposer() {
@@ -394,8 +442,11 @@ export default function MarketingPage() {
         </div>
       </section>
 
+      <CreativeStudio language={language} disabled={busy} onUseInPost={useGenerated} />
+
       <section className="grid gap-4 lg:grid-cols-2">
         <form
+          id="post-composer"
           onSubmit={(e) => {
             e.preventDefault();
             void submit();
@@ -473,7 +524,7 @@ export default function MarketingPage() {
             />
           </div>
 
-          <MediaPicker language={language} selectedIds={mediaIds} onChange={setMediaIds} disabled={busy} canCreateAds />
+          <MediaPicker language={language} selectedIds={mediaIds} onChange={setMediaIds} disabled={busy} />
 
           {(channels.includes("instagram") && mediaIds.length === 0) || (hasVideo && hasImage && channels.includes("facebook")) ? (
             <div className="flex items-start gap-1.5 rounded-md bg-amber-50 px-3 py-2 text-[11px] text-amber-800">

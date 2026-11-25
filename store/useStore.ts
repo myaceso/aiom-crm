@@ -24,6 +24,7 @@ import type {
   EmailIntegration,
   WhatsAppIntegration,
   TelegramIntegration,
+  CreativeIntegration,
   MessagingSend,
   SafeUser,
   Session,
@@ -44,6 +45,7 @@ import {
   createSeedEmailTemplates,
   defaultSettings,
   defaultIntegrations,
+  normalizeIntegrations,
 } from "@/lib/seed";
 import {
   buildConnectedSocial,
@@ -175,6 +177,8 @@ type Store = {
   disconnectWhatsApp: () => void;
   connectTelegram: (data: Omit<TelegramIntegration, "connected">) => void;
   disconnectTelegram: () => void;
+  connectCreative: (data: Omit<CreativeIntegration, "connected">) => void;
+  disconnectCreative: () => void;
   messagingSends: MessagingSend[];
   addMessagingSend: (s: Omit<MessagingSend, "id" | "createdAt">) => void;
   toast: Toast;
@@ -217,6 +221,7 @@ export const useStore = create<Store>()(
             const state = data.state as CrmState;
             set({
               ...state,
+              integrations: normalizeIntegrations(state.integrations),
               mediaAssets: (state.mediaAssets || []).map((m) => ({
                 ...m,
                 previewUrl: undefined,
@@ -815,6 +820,24 @@ export const useStore = create<Store>()(
             telegram: { ...defaultIntegrations.telegram },
           },
         })),
+      connectCreative: (data) =>
+        set((s) => ({
+          integrations: {
+            ...s.integrations,
+            creative: {
+              connected: true,
+              openaiApiKey: data.openaiApiKey.trim(),
+              falKey: data.falKey.trim(),
+            },
+          },
+        })),
+      disconnectCreative: () =>
+        set((s) => ({
+          integrations: {
+            ...s.integrations,
+            creative: { ...defaultIntegrations.creative },
+          },
+        })),
       messagingSends: [],
       addMessagingSend: (entry) =>
         set((s) => ({
@@ -891,23 +914,10 @@ export const useStore = create<Store>()(
           !s.integrations?.sms ||
           !s.integrations?.email ||
           !s.integrations?.whatsapp ||
-          !s.integrations?.telegram
+          !s.integrations?.telegram ||
+          !s.integrations?.creative
         ) {
-          patch.integrations = {
-            sms: { ...defaultIntegrations.sms, ...(s.integrations?.sms || {}) },
-            email: {
-              ...defaultIntegrations.email,
-              ...(s.integrations?.email || {}),
-            },
-            whatsapp: {
-              ...defaultIntegrations.whatsapp,
-              ...(s.integrations?.whatsapp || {}),
-            },
-            telegram: {
-              ...defaultIntegrations.telegram,
-              ...(s.integrations?.telegram || {}),
-            },
-          };
+          patch.integrations = normalizeIntegrations(s.integrations);
         }
         if (!Array.isArray(s.messagingSends)) {
           patch.messagingSends = [];

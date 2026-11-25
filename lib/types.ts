@@ -263,6 +263,14 @@ export type TelegramIntegration = {
   defaultChatId: string;
 };
 
+export type CreativeIntegration = {
+  connected: boolean;
+  /** OpenAI key for image generation. Env OPENAI_API_KEY wins when set. */
+  openaiApiKey: string;
+  /** fal.ai key for video generation. Env FAL_KEY wins when set. */
+  falKey: string;
+};
+
 export type MessagingSend = {
   id: string;
   channel: "whatsapp" | "telegram";
@@ -279,6 +287,7 @@ export type Integrations = {
   email: EmailIntegration;
   whatsapp: WhatsAppIntegration;
   telegram: TelegramIntegration;
+  creative: CreativeIntegration;
 };
 
 export type PermissionKey =
