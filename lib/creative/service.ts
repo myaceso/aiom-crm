@@ -1,7 +1,7 @@
 import { acquireLock, releaseLock } from "@/lib/kvStore";
-import { invalidKeyImage, invalidKeyVideo, missingCopyKey } from "./messages";
+import { editVideoUnsupported, invalidKeyImage, invalidKeyVideo, missingCopyKey, missingEditKey } from "./messages";
 import { downloadRemote, isPublicHttps } from "./remote";
-import { generateImage, pollVideo, ProviderError, submitVideo, uploadReferenceImage } from "./providers";
+import { editImage, generateImage, pollVideo, ProviderError, submitVideo, uploadReferenceImage } from "./providers";
 import { generateCreativeCopy, type CreativeCopy } from "./copyAi";
 import { parseHashtags } from "./copy";
 import { buildCreativePrompt, normalizeStyle } from "./prompt";
@@ -19,7 +19,7 @@ import {
   trackPending,
   trimAssets,
 } from "./records";
-import { removeStored, storeMedia } from "./storage";
+import { readLocalMedia, removeStored, storeMedia } from "./storage";
 import type { CreativeKeys as Keys } from "./keys";
 import type { Bilingual, CreativeAsset, CreativeConfig, CreativeJob, StoredCreativeAsset } from "./types";
 import { IMAGE_ASPECTS, VIDEO_ASPECTS, type CreativeKind, type StyleId } from "./types";
@@ -357,6 +357,67 @@ export async function readGeneration(userId: string, jobId: string, keys: Keys):
     throw error;
   } finally {
     await releaseLock(lock);
+  }
+}
+
+async function sourceBytes(asset: StoredCreativeAsset): Promise<{ bytes: Buffer; mime: string }> {
+  if (asset.pathname.startsWith("local/")) {
+    return { bytes: await readLocalMedia(asset.userId, asset.id, asset.mime), mime: asset.mime };
+  }
+  const remote = await downloadRemote(asset.url, 20_000_000);
+  return { bytes: remote.bytes, mime: remote.mime || asset.mime };
+}
+
+export async function editCreativeImage(
+  userId: string,
+  id: string,
+  instruction: string,
+  lang: "es" | "en",
+  keys: Keys
+): Promise<{ asset: CreativeAsset; copyWarning: Bilingual | null }> {
+  const note = instruction.trim();
+  if (!note || note.length > 800) {
+    throw new CreativeRequestError(400, "invalid_input", text("Escribe qué quieres cambiar, en menos de 800 caracteres.", "Describe the change in under 800 characters."));
+  }
+  const current = await getAsset(userId, id);
+  if (!current) throw new CreativeRequestError(404, "not_found", text("No encontramos esa creación.", "We could not find that creation."));
+  if (current.kind !== "image") throw new CreativeRequestError(400, "unsupported", editVideoUnsupported);
+  if (!keys.mock && !keys.openai) throw new CreativeRequestError(503, "missing_key", missingEditKey);
+
+  try {
+    const provider = keys.mock ? "mock" : "openai";
+    const prompt = `Change only what is requested. Keep the same subject and framing unless the request says otherwise.\nRequest: ${note}\nOriginal idea: ${current.prompt}`;
+    const edited = keys.mock
+      ? await editImage(provider, { prompt: `${current.prompt}. Cambio: ${note}`, aspectRatio: current.aspectRatio || "1:1" }, "")
+      : await editImage(provider, { ...(await sourceBytes(current)), prompt, aspectRatio: current.aspectRatio || "1:1" }, keys.openai);
+    const file = await bytesFromResult({ bytes: edited.bytes, url: edited.remoteUrl, mime: edited.mime }, "image");
+    const copy = await generateCreativeCopy({
+      prompt: `${current.prompt}. Cambio: ${note}`,
+      kind: "image",
+      style: current.style,
+      lang,
+      mock: keys.mock,
+    });
+    const asset = await materialize(
+      userId,
+      {
+        kind: "image",
+        prompt: current.prompt,
+        style: current.style,
+        aspectRatio: current.aspectRatio,
+        provider,
+        caption: copy.caption,
+        hashtags: copy.hashtags,
+        groupId: current.groupId || current.id,
+      },
+      file.bytes,
+      file.mime
+    );
+    return { asset, copyWarning: copy.warning };
+  } catch (error) {
+    if (error instanceof ProviderError) throw providerCopy(error, "image");
+    if (error instanceof CreativeRequestError) throw error;
+    throw new CreativeRequestError(502, "provider_error", text("No se pudo editar la imagen.", "Could not edit the image."));
   }
 }
 

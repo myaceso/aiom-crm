@@ -5,6 +5,7 @@ import {
   CreativeRequestError,
   configOf,
   deleteGalleryItem,
+  editCreativeImage,
   galleryFor,
   parseGenerateBody,
   readGeneration,
@@ -74,6 +75,15 @@ export async function POST(req: Request) {
       }
       const refreshed = await refreshCreativeCopy(auth.user.id, id, keys, lang);
       return NextResponse.json(refreshed);
+    }
+    if (body && typeof body === "object" && (body as { action?: string }).action === "edit") {
+      const id = String((body as { id?: string }).id || "");
+      const instruction = String((body as { instruction?: string }).instruction || "");
+      if (!/^[0-9a-f-]{36}$/i.test(id)) {
+        return fail(400, "invalid_input", "Falta la creación.", "The creation is missing.");
+      }
+      const edited = await editCreativeImage(auth.user.id, id, instruction, lang, keys);
+      return NextResponse.json(edited);
     }
     const input = parseGenerateBody(body);
     const result = await startGeneration(auth.user.id, input, keys);

@@ -134,7 +134,10 @@ export function CreativeStudio({
   const [caption, setCaption] = useState("");
   const [hashtags, setHashtags] = useState("");
   const [copyWarning, setCopyWarning] = useState("");
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [editNote, setEditNote] = useState("");
   const controller = useRef<AbortController | null>(null);
+  const editRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => () => controller.current?.abort(), []);
   useEffect(() => () => {
@@ -199,11 +202,23 @@ export function CreativeStudio({
     setSource(await response.blob());
   }
 
-  async function generate(variation = false) {
+  function openDetail(item: CreativeAsset) {
+    applyAsset(item);
+    setDetailId(item.id);
+    setEditNote("");
+    window.setTimeout(() => document.getElementById("detalle-creacion")?.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
+  }
+
+  async function generate(variation = false, source?: CreativeAsset) {
     const abort = new AbortController();
     controller.current?.abort();
     controller.current = abort;
-    const groupId = variation ? result?.groupId : undefined;
+    const useKind = source?.kind || kind;
+    const usePrompt = (source?.prompt || prompt).trim();
+    const useStyle = source ? source.style || "" : style;
+    const useAspect = source?.aspectRatio || aspectRatio;
+    const useDuration = source?.durationSec === 10 ? 10 : source ? 5 : duration;
+    const groupId = variation ? source?.groupId || source?.id || result?.groupId || result?.id : undefined;
     setBusy(true);
     setError("");
     setNotice("");
@@ -216,23 +231,29 @@ export function CreativeStudio({
       clearFlyer();
     }
     setPhase(variation
-      ? (kind === "video" ? L("Regenerando video…", "Regenerating video…") : L("Regenerando imagen…", "Regenerating image…"))
-      : (kind === "video" ? L("Enviando el video…", "Submitting the video…") : L("Generando imagen…", "Generating image…")));
+      ? (useKind === "video" ? L("Regenerando video…", "Regenerating video…") : L("Regenerando imagen…", "Regenerating image…"))
+      : (useKind === "video" ? L("Enviando el video…", "Submitting the video…") : L("Generando imagen…", "Generating image…")));
     setElapsed(0);
     try {
+      if (!usePrompt) {
+        setError(L("Escribe un prompt para regenerar esta creación.", "Write a prompt to regenerate this creation."));
+        if (source) openDetail(source);
+        else if (result) openDetail(result);
+        return;
+      }
       let photo: string | undefined;
-      if (kind === "video" && referenceFile.current) photo = await fileToJpegDataUrl(referenceFile.current);
+      if (useKind === "video" && referenceFile.current && !source) photo = await fileToJpegDataUrl(referenceFile.current);
       const started = await fetch(endpoint, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         signal: abort.signal,
         body: JSON.stringify({
-          kind,
-          prompt,
-          style,
-          aspectRatio,
-          duration,
+          kind: useKind,
+          prompt: usePrompt,
+          style: useStyle,
+          aspectRatio: useAspect,
+          duration: useDuration,
           photo,
           groupId,
           lang: language,
@@ -245,6 +266,7 @@ export function CreativeStudio({
       }
       if (data.status === "succeeded" && data.asset) {
         applyAsset(data.asset, warnText(data));
+        setDetailId(data.asset.id);
         await rememberImage(data.asset);
         await loadGallery();
         window.dispatchEvent(new Event("enone-creative-updated"));
@@ -282,6 +304,7 @@ export function CreativeStudio({
         }
         if (view.asset) {
           applyAsset(view.asset, warnText(view));
+          setDetailId(view.asset.id);
           await loadGallery();
           window.dispatchEvent(new Event("enone-creative-updated"));
           return;
@@ -347,8 +370,51 @@ export function CreativeStudio({
     return data.asset as CreativeAsset;
   }
 
-  async function regenCopy() {
-    if (!result) return;
+  async function editItem(item: CreativeAsset) {
+    if (item.kind !== "image") {
+      openDetail(item);
+      setError(L("Editar con IA funciona con imágenes. En un video usa Regenerar.", "AI edit works on images. For a video, use Regenerate."));
+      return;
+    }
+    const instruction = editNote.trim();
+    if (!instruction) {
+      openDetail(item);
+      setError(L("Escribe qué quieres cambiar, por ejemplo: cambia el fondo.", "Describe the change, for example: change the background."));
+      window.setTimeout(() => editRef.current?.focus(), 60);
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setNotice("");
+    setPhase(L("Editando la imagen…", "Editing the image…"));
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "edit", id: item.id, instruction, lang: language }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.asset) {
+        setError(apiText(data));
+        return;
+      }
+      applyAsset(data.asset, warnText(data));
+      setDetailId(data.asset.id);
+      setEditNote("");
+      await rememberImage(data.asset);
+      await loadGallery();
+      window.dispatchEvent(new Event("enone-creative-updated"));
+    } catch {
+      setError(L("No se pudo editar la imagen.", "Could not edit the image."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function regenCopy(target?: CreativeAsset) {
+    const asset = target || result;
+    if (!asset) return;
     setBusy(true);
     setError("");
     try {
@@ -356,7 +422,7 @@ export function CreativeStudio({
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "copy", id: result.id, lang: language }),
+        body: JSON.stringify({ action: "copy", id: asset.id, lang: language }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.asset) {
@@ -684,6 +750,48 @@ export function CreativeStudio({
         </div>
       </div>
 
+      {detailId && result && (
+        <section id="detalle-creacion" className="mt-6 space-y-3 rounded-xl border border-[var(--brand)]/40 bg-slate-50 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-slate-900">{L("Editar esta creación", "Edit this creation")}</h3>
+            <button type="button" className="text-xs font-semibold text-slate-500 underline" onClick={() => setDetailId(null)}>
+              {L("Cerrar", "Close")}
+            </button>
+          </div>
+          <p className="text-xs text-slate-500">
+            {L("Cambia el prompt de arriba y pulsa Regenerar, o describe un cambio para Editar con IA. La versión original se queda en la galería.", "Change the prompt above and press Regenerate, or describe a change for AI edit. The original stays in the gallery.")}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled={disabled || busy || !prompt.trim()} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 disabled:opacity-40" onClick={() => void generate(true)}>
+              {result.kind === "image" ? L("Regenerar", "Regenerate") : L("Regenerar video", "Regenerate video")}
+            </button>
+            <button type="button" disabled={disabled || busy || result.kind !== "image"} className="rounded-md border border-slate-900 bg-slate-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-40" onClick={() => void editItem(result)}>
+              {L("Editar con IA", "Edit with AI")}
+            </button>
+            <button type="button" disabled={disabled || busy} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 disabled:opacity-40" onClick={() => void regenCopy()}>
+              {L("Regenerar texto", "Regenerate text")}
+            </button>
+          </div>
+          {result.kind === "video" && (
+            <p className="text-xs text-slate-500">{L("Editar con IA está disponible para imágenes. En video usa Regenerar.", "AI edit is available for images. For video, use Regenerate.")}</p>
+          )}
+          {result.kind === "image" && (
+            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              {L("Qué quieres cambiar", "What to change")}
+              <textarea
+                ref={editRef}
+                className={input}
+                rows={2}
+                maxLength={800}
+                value={editNote}
+                placeholder={L("cambia el fondo, pon más luz, quita el texto…", "change the background, add light, remove the text…")}
+                onChange={(event) => setEditNote(event.target.value)}
+              />
+            </label>
+          )}
+        </section>
+      )}
+
       <div className="mt-6">
         <h3 className="mb-3 text-sm font-semibold text-slate-800">{L("Galería", "Gallery")}</h3>
         {gallery.length === 0 ? (
@@ -694,7 +802,7 @@ export function CreativeStudio({
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {gallery.map((item) => (
               <li key={item.id} className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-                <div className="relative aspect-square bg-slate-100">
+                <div role="button" tabIndex={0} className="relative block aspect-square w-full cursor-pointer bg-slate-100" onClick={() => openDetail(item)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openDetail(item); } }}>
                   {item.kind === "video" ? (
                     <video src={item.url} muted playsInline preload="metadata" className="h-full w-full object-cover" />
                   ) : (
@@ -708,7 +816,18 @@ export function CreativeStudio({
                   )}
                 </div>
                 <div className="space-y-2 p-2">
-                  <p className="line-clamp-2 text-[11px] text-slate-600">{item.prompt}</p>
+                  <p className="line-clamp-2 text-[11px] text-slate-600">{item.prompt || L("Sin prompt", "No prompt")}</p>
+                  <div className="flex flex-wrap gap-1">
+                    <button type="button" disabled={disabled || busy || !item.prompt?.trim()} className="rounded bg-[var(--brand)] px-1.5 py-1 text-[10px] font-semibold text-white disabled:opacity-40" onClick={() => void generate(true, item)}>
+                      {L("Regenerar", "Regenerate")}
+                    </button>
+                    <button type="button" disabled={disabled || busy} className="rounded border border-slate-900 px-1.5 py-1 text-[10px] font-semibold text-slate-900 disabled:opacity-40" onClick={() => { openDetail(item); if (item.kind === "image") window.setTimeout(() => editRef.current?.focus(), 80); }}>
+                      {L("Editar con IA", "Edit with AI")}
+                    </button>
+                    <button type="button" disabled={disabled || busy} className="rounded border border-slate-200 px-1.5 py-1 text-[10px] font-semibold text-slate-700 disabled:opacity-40" onClick={() => { openDetail(item); void regenCopy(item); }}>
+                      {L("Regenerar texto", "Regenerate text")}
+                    </button>
+                  </div>
                   <div className="flex flex-wrap gap-1">
                     <button type="button" className="rounded border border-slate-200 px-1.5 py-1 text-[10px] font-semibold text-slate-600" onClick={() => void downloadUrl(item.url, item.name).catch(() => setError(L("No se pudo descargar.", "Could not download.")))}>
                       {L("Descargar", "Download")}

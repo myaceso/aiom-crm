@@ -45,7 +45,8 @@ const MEDIA_HOST = (host: string) =>
   host === "storage.googleapis.com" ||
   host.endsWith(".storage.googleapis.com") ||
   host.endsWith(".oaiusercontent.com") ||
-  host.endsWith(".openai.com");
+  host.endsWith(".openai.com") ||
+  host.endsWith(".blob.vercel-storage.com");
 
 async function readLimited(response: Response, maxBytes: number): Promise<Buffer> {
   if (!response.body) throw new Error("empty_body");
