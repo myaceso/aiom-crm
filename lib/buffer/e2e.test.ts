@@ -6,6 +6,7 @@ import { BUFFER_MSG } from "./messages";
 import { createMockBuffer, MOCK_FB, MOCK_IG } from "./mock";
 import { blankConfig, type BufferAuthRecord } from "./model";
 import { refreshAccessToken } from "./oauth";
+import { buildServiceMetadata, resolveInstagramType } from "./metadata";
 import { dueSlots, pickDailyContent, studioGalleryAssets, zonedSlotToUtc } from "./schedule";
 
 function auth(channelIds: string[]): BufferAuthRecord {
@@ -104,6 +105,20 @@ describe("Buffer client (mock)", () => {
     assert.equal(scheduled.dueAt, "2026-12-01T15:00:00.000Z");
     assert.match(scheduled.warning || "", /un solo video/);
     assert.deepEqual(mock.posts[1].input.assets, [{ video: { url: "https://cdn.example.test/v.mp4" } }]);
+  });
+
+  it("sends the Instagram post type Buffer requires", async () => {
+    const mock = createMockBuffer();
+    const client = createBufferClient("ok-key", mock.transport);
+    await client.createPost({
+      channelId: MOCK_IG,
+      text: "foto",
+      mode: "addToQueue",
+      media: [{ url: "https://cdn.example.test/a.jpg", kind: "image", name: "a.jpg" }],
+      metadata: buildServiceMetadata("instagram", { hasVideo: false, instagramType: "post", text: "foto" }).metadata,
+    });
+    assert.equal(resolveInstagramType("post", true), "reel");
+    assert.deepEqual(mock.posts[0].input.metadata, { instagram: { type: "post", shouldShareToFeed: true } });
   });
 
   it("translates Buffer channel errors and retries notification-only profiles", async () => {

@@ -1,5 +1,6 @@
 import type { BufferClient } from "./client";
 import { BufferApiError } from "./client";
+import { buildServiceMetadata, type InstagramPlacement } from "./metadata";
 import { serviceLabel } from "./model";
 import {
   blankConfig,
@@ -74,6 +75,7 @@ export async function deliverToChannels(opts: {
   source: "manual" | "daily";
   warning: string | null;
   now: Date;
+  instagramType?: InstagramPlacement;
   createPost: BufferClient["createPost"];
 }): Promise<BufferSendLog[]> {
   const logs: BufferSendLog[] = [];
@@ -116,6 +118,17 @@ export async function deliverToChannels(opts: {
     if (ch.isQueuePaused && opts.mode === "addToQueue") {
       base.warning = [base.warning, "La cola de este canal está en pausa en Buffer; no se publicará hasta que la reanudes."].filter(Boolean).join(" ");
     }
+    const placement = buildServiceMetadata(ch.service, {
+      instagramType: opts.instagramType,
+      hasVideo: opts.media.some((item) => item.kind === "video"),
+      text: opts.text,
+    });
+    if (placement.error) {
+      base.error = placement.error;
+      logs.push(base);
+      continue;
+    }
+    if (placement.warning) base.warning = [base.warning, placement.warning].filter(Boolean).join(" ");
     try {
       const post = await opts.createPost({
         channelId: ch.id,
@@ -124,6 +137,7 @@ export async function deliverToChannels(opts: {
         dueAt: due,
         media: opts.media,
         aiAssisted: opts.aiAssisted,
+        metadata: placement.metadata,
       });
       base.ok = true;
       base.bufferPostId = post.id;
@@ -204,6 +218,8 @@ export async function runDailyPass(deps: DailyDeps): Promise<{ config: BufferCon
 
     const mode: BufferPostMode = schedule.mode === "fixed" ? "customScheduled" : "addToQueue";
     const dueAt = mode === "customScheduled" ? zonedSlotToUtc(date, slot, schedule.timezone).toISOString() : null;
+    const bare = item.refId.replace(/^creative:/, "");
+    const pinnedType = schedule.pinnedPlacements?.[bare] || schedule.pinnedPlacements?.[item.refId];
     const logs = await deliverToChannels({
       channels,
       text,
@@ -214,6 +230,7 @@ export async function runDailyPass(deps: DailyDeps): Promise<{ config: BufferCon
       source: "daily",
       warning,
       now: deps.now,
+      instagramType: pinnedType,
       createPost,
     });
     for (const log of logs) pushLog(cfg, log);

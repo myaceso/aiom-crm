@@ -153,6 +153,7 @@ export type CreatePostInput = {
   media: BufferMedia[];
   aiAssisted?: boolean;
   schedulingType?: "automatic" | "notification";
+  metadata?: Record<string, unknown>;
 };
 
 function assetsOf(media: BufferMedia[]): { assets: Record<string, unknown>[]; warning: string | null } {
@@ -228,6 +229,7 @@ export function createBufferClient(token: string, transport: BufferTransport = b
           source: "enone",
           ...(input.aiAssisted ? { aiAssisted: true } : {}),
           ...(input.mode === "customScheduled" && input.dueAt ? { dueAt: input.dueAt } : {}),
+          ...(input.metadata ? { metadata: input.metadata } : {}),
         },
       };
       const send = async (scheduling: "automatic" | "notification") => {

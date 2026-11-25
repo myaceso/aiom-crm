@@ -23,6 +23,7 @@ import {
 } from "./model";
 import { oauthConfigured, refreshAccessToken } from "./oauth";
 import { getBufferConfig, listDailyUserIds, saveBufferConfig, withBufferLock } from "./persist";
+import { asInstagramPlacement } from "./metadata";
 import { pinDailyAsset, studioGalleryAssets } from "./schedule";
 
 export function bufferEnvKey(): string {
@@ -253,6 +254,7 @@ export async function sendBufferPost(
     aiAssisted?: boolean;
     addToDaily?: boolean;
     creativeId?: string;
+    instagramType?: string;
   }
 ) {
   const ran = await withBufferLock(userId, async () => {
@@ -294,6 +296,7 @@ export async function sendBufferPost(
       const when = new Date(String(input.dueAt || ""));
       if (Number.isNaN(+when)) throw new BufferApiError(BUFFER_MSG.badTime, 400, "mutation");
     }
+    const instagramType = asInstagramPlacement(input.instagramType);
     const logs = await deliverToChannels({
       channels,
       text: text || media[0]?.name || "Publicación",
@@ -304,13 +307,14 @@ export async function sendBufferPost(
       source: "manual",
       warning: null,
       now: new Date(),
+      instagramType,
       createPost: clientFor(token).createPost,
     });
     cfg.logs = [...logs.slice().reverse(), ...cfg.logs].slice(0, 200);
     let pinned = false;
     if (input.addToDaily && input.creativeId) {
       const channelsForDaily = requested.filter((id) => channels.some((ch) => ch.id === id));
-      cfg.schedule = pinDailyAsset(cfg.schedule, input.creativeId, channelsForDaily);
+      cfg.schedule = pinDailyAsset(cfg.schedule, input.creativeId, channelsForDaily, instagramType);
       pinned = true;
       cfg.logs.unshift({
         id: newBufferId("bf"),
