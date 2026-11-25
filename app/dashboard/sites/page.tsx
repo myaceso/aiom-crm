@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { t } from "@/lib/i18n";
 import type { DictKey } from "@/lib/i18n";
+import { isAdmin } from "@/lib/auth";
 import { LANDING_BRAND, LANDING_PATH } from "@/lib/landing/config";
 import { useStore } from "@/store/useStore";
 
@@ -18,6 +19,9 @@ const ROWS = [
 
 export default function SitesPage() {
   const language = useStore((s) => s.settings.language);
+  const users = useStore((s) => s.users);
+  const session = useStore((s) => s.session);
+  const currentUser = users.find((user) => user.id === session?.userId) ?? null;
   return (
     <div className="space-y-4">
       <div>
@@ -37,14 +41,24 @@ export default function SitesPage() {
               Funnel · Published · {LANDING_PATH}
             </p>
           </div>
-          <Link
-            href={LANDING_PATH}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex min-h-[40px] items-center justify-center rounded-md bg-[#0f172a] px-4 text-sm font-semibold text-[#FFC72C]"
-          >
-            {t(language, "sitesOpenPage")}
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            {isAdmin(currentUser) && (
+              <Link
+                href="/dashboard/sites/finanzas"
+                className="inline-flex min-h-[40px] items-center justify-center rounded-md bg-[#0f172a] px-4 text-sm font-semibold text-[#FFC72C]"
+              >
+                {t(language, "sitesEditPage")}
+              </Link>
+            )}
+            <Link
+              href={LANDING_PATH}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-h-[40px] items-center justify-center rounded-md border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
+            >
+              {t(language, "sitesOpenPage")}
+            </Link>
+          </div>
         </div>
       </article>
       <p className="text-sm text-slate-500">{t(language, "sitesDemoNote")}</p>

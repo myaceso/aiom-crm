@@ -1,9 +1,5 @@
 import type { Contact, CrmState, LeadAttribution } from "../types";
-import {
-  LANDING_BRAND,
-  LANDING_SERVICES,
-  type LandingServiceId,
-} from "./config";
+import { LANDING_BRAND, LANDING_SERVICES } from "./config";
 
 const SERVICE_IDS = new Set<string>(LANDING_SERVICES.map((s) => s.id));
 
@@ -27,7 +23,7 @@ export type ValidLandingLead = {
   name: string;
   phone: string;
   email: string;
-  service: LandingServiceId;
+  service: string;
   message: string;
   utm: LandingUtm;
 };
@@ -59,7 +55,10 @@ function cleanUtm(value: unknown): string | undefined {
   return text || undefined;
 }
 
-export function validateLandingLead(body: unknown): LandingValidation {
+export function validateLandingLead(
+  body: unknown,
+  allowedServices?: readonly string[]
+): LandingValidation {
   const record = asRecord(body);
   if (!record) return { ok: false, error: "invalid_name" };
 
@@ -81,7 +80,12 @@ export function validateLandingLead(body: unknown): LandingValidation {
   if (!EMAIL_RE.test(email)) return { ok: false, error: "invalid_email" };
 
   const service = cleanText(record.service, 40);
-  if (!SERVICE_IDS.has(service)) return { ok: false, error: "invalid_service" };
+  const allowed = new Set(
+    (allowedServices && allowedServices.length ? allowedServices : Array.from(SERVICE_IDS)).map((id) =>
+      id.trim().slice(0, 40)
+    )
+  );
+  if (!allowed.has(service)) return { ok: false, error: "invalid_service" };
 
   const message = cleanText(record.message, 1000);
   if (typeof record.message === "string" && record.message.trim().length > 1000) {
@@ -106,15 +110,15 @@ export function validateLandingLead(body: unknown): LandingValidation {
       name,
       phone,
       email,
-      service: service as LandingServiceId,
+      service,
       message,
       utm,
     },
   };
 }
 
-export function serviceLabel(id: string): string {
-  return LANDING_SERVICES.find((s) => s.id === id)?.label ?? id;
+export function serviceLabel(id: string, labels?: Record<string, string>): string {
+  return labels?.[id] ?? LANDING_SERVICES.find((s) => s.id === id)?.label ?? id;
 }
 
 function attributionOf(lead: ValidLandingLead): LeadAttribution {
@@ -144,7 +148,8 @@ function attributionLine(attribution: LeadAttribution): string {
 export function buildLandingContact(
   lead: ValidLandingLead,
   now = new Date(),
-  id?: string
+  id?: string,
+  labels?: Record<string, string>
 ): Contact {
   const parts = lead.name.split(" ").filter(Boolean);
   const firstName = parts[0] || lead.name;
@@ -153,7 +158,7 @@ export function buildLandingContact(
   const contactId =
     id ||
     `ld_${now.getTime().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-  const label = serviceLabel(lead.service);
+  const label = serviceLabel(lead.service, labels);
   const attribution = attributionOf(lead);
   const note = [
     `Solicitud desde la landing «${LANDING_BRAND}».`,

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { appendLandingLead } from "@/lib/landing/persist";
 import { buildLandingContact, validateLandingLead } from "@/lib/landing/lead";
+import { defaultLandingTemplate, serviceChoices } from "@/lib/landing/template";
+import { getPublishedLanding } from "@/lib/landing/templateStore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,7 +39,9 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json().catch(() => null);
-  const parsed = validateLandingLead(body);
+  const published = await getPublishedLanding().catch(() => null);
+  const choices = serviceChoices(published ?? defaultLandingTemplate());
+  const parsed = validateLandingLead(body, choices.map((item) => item.id));
   if (!parsed.ok) {
     return NextResponse.json({ ok: false, error: parsed.error }, { status: 400 });
   }
@@ -46,7 +50,8 @@ export async function POST(req: Request) {
   }
 
   try {
-    const contact = buildLandingContact(parsed.lead);
+    const labels = Object.fromEntries(choices.map((item) => [item.id, item.title]));
+    const contact = buildLandingContact(parsed.lead, new Date(), undefined, labels);
     const saved = await appendLandingLead(contact);
     if (!saved.ok) {
       return NextResponse.json({ ok: false, error: "unavailable" }, { status: 503 });
