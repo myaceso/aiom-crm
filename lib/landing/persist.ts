@@ -39,6 +39,7 @@ export function emptyCrmState(): CrmState {
       email: { ...defaultIntegrations.email },
       whatsapp: { ...defaultIntegrations.whatsapp },
       telegram: { ...defaultIntegrations.telegram },
+      creative: { ...defaultIntegrations.creative },
     },
     messagingSends: [],
   };

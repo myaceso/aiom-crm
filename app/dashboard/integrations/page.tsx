@@ -15,6 +15,7 @@ import {
   ShieldAlert,
   Phone,
   Send,
+  Sparkles,
 } from "lucide-react";
 import { t } from "@/lib/i18n";
 import type { EmailProvider, SocialNetworkId } from "@/lib/types";
@@ -59,6 +60,8 @@ export default function IntegrationsPage() {
   const disconnectWhatsApp = useStore((s) => s.disconnectWhatsApp);
   const connectTelegram = useStore((s) => s.connectTelegram);
   const disconnectTelegram = useStore((s) => s.disconnectTelegram);
+  const connectCreative = useStore((s) => s.connectCreative);
+  const disconnectCreative = useStore((s) => s.disconnectCreative);
   const showToast = useStore((s) => s.showToast);
 
   const [smsForm, setSmsForm] = useState({
@@ -81,7 +84,11 @@ export default function IntegrationsPage() {
     botToken: integrations.telegram?.botToken || "",
     defaultChatId: integrations.telegram?.defaultChatId || "",
   });
-  const [testing, setTesting] = useState<"sms" | "email" | "whatsapp" | "telegram" | null>(null);
+  const [creativeForm, setCreativeForm] = useState({
+    openaiApiKey: integrations.creative?.openaiApiKey || "",
+    falKey: integrations.creative?.falKey || "",
+  });
+  const [testing, setTesting] = useState<"sms" | "email" | "whatsapp" | "telegram" | "openai" | "fal" | null>(null);
 
   const connectedCount = useMemo(
     () => connections.filter((c) => c.connected).length,
@@ -286,6 +293,38 @@ export default function IntegrationsPage() {
     } finally {
       setTesting(null);
     }
+  }
+
+  async function testCreative(provider: "openai" | "fal") {
+    const apiKey = provider === "openai" ? creativeForm.openaiApiKey.trim() : creativeForm.falKey.trim();
+    if (!apiKey) {
+      showToast(t(language, "requiredFields"));
+      return;
+    }
+    setTesting(provider);
+    try {
+      const res = await fetch("/api/marketing/creative/test", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, apiKey, lang: language }),
+      });
+      const data = await res.json();
+      showToast(data.message || data.error || t(language, res.ok ? "testOk" : "testFail"));
+    } catch {
+      showToast(t(language, "testFail"));
+    } finally {
+      setTesting(null);
+    }
+  }
+
+  function onConnectCreative() {
+    if (!creativeForm.openaiApiKey.trim() && !creativeForm.falKey.trim()) {
+      showToast(t(language, "requiredFields"));
+      return;
+    }
+    connectCreative(creativeForm);
+    showToast(language === "es" ? "Estudio creativo conectado" : "Creative studio connected");
   }
 
   function onConnectTelegram() {
@@ -908,6 +947,94 @@ export default function IntegrationsPage() {
                 onClick={onConnectTelegram}
                 className="brand-bg rounded-md px-3 py-2 text-sm font-semibold text-white"
               >
+                {t(language, "connect")}
+              </button>
+            </>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-slate-500" />
+            <h2 className="text-sm font-semibold text-slate-700">{t(language, "creativeSettings")}</h2>
+            {integrations.creative?.connected && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">
+                <CheckCircle2 className="h-3 w-3" />
+                {t(language, "connectedBadge")}
+              </span>
+            )}
+          </div>
+          <Link href="/dashboard/marketing" className="text-xs font-medium text-[var(--brand)] hover:underline">
+            {t(language, "marketing")} →
+          </Link>
+        </div>
+        <p className="mb-4 text-sm text-slate-500">{t(language, "creativeSettingsHelp")}</p>
+        <div className="grid gap-3">
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              {t(language, "creativeOpenAiKey")}
+            </label>
+            <input
+              type="password"
+              value={creativeForm.openaiApiKey}
+              disabled={integrations.creative?.connected}
+              onChange={(e) => setCreativeForm((f) => ({ ...f, openaiApiKey: e.target.value }))}
+              autoComplete="off"
+              placeholder="sk-..."
+              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--brand)]/30 disabled:bg-slate-50"
+            />
+            <p className="mt-1 text-[11px] leading-snug text-slate-400">{t(language, "creativeOpenAiHelp")}</p>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              {t(language, "creativeFalKey")}
+            </label>
+            <input
+              type="password"
+              value={creativeForm.falKey}
+              disabled={integrations.creative?.connected}
+              onChange={(e) => setCreativeForm((f) => ({ ...f, falKey: e.target.value }))}
+              autoComplete="off"
+              placeholder="id:secret"
+              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--brand)]/30 disabled:bg-slate-50"
+            />
+            <p className="mt-1 text-[11px] leading-snug text-slate-400">{t(language, "creativeFalHelp")}</p>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap justify-end gap-2">
+          {integrations.creative?.connected ? (
+            <button
+              type="button"
+              onClick={() => {
+                disconnectCreative();
+                setCreativeForm({ openaiApiKey: "", falKey: "" });
+                showToast(language === "es" ? "Estudio creativo desconectado" : "Creative studio disconnected");
+              }}
+              className="rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600"
+            >
+              {t(language, "disconnect")}
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                disabled={testing === "openai"}
+                onClick={() => void testCreative("openai")}
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 disabled:opacity-50"
+              >
+                {language === "es" ? "Probar OpenAI" : "Test OpenAI"}
+              </button>
+              <button
+                type="button"
+                disabled={testing === "fal"}
+                onClick={() => void testCreative("fal")}
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 disabled:opacity-50"
+              >
+                {language === "es" ? "Probar fal.ai" : "Test fal.ai"}
+              </button>
+              <button type="button" onClick={onConnectCreative} className="brand-bg rounded-md px-3 py-2 text-sm font-semibold text-white">
                 {t(language, "connect")}
               </button>
             </>

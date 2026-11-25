@@ -17,15 +17,11 @@ import {
   Plus,
 } from "lucide-react";
 import clsx from "clsx";
-import { CreativeStudio } from "./CreativeStudio";
 import { t } from "@/lib/i18n";
 import type { Lang, MediaAsset } from "@/lib/types";
-import { saveMediaBlob, deleteMediaBlob } from "@/lib/mediaDb";
-import { toInstagramFriendlyImage, uploadToCloud } from "@/lib/mediaCloud";
+import { deleteMediaBlob } from "@/lib/mediaDb";
+import { ingestMediaFile } from "@/lib/attachMedia";
 import { useStore } from "@/store/useStore";
-
-const IMAGE_MAX = 10 * 1024 * 1024;
-const VIDEO_MAX = 200 * 1024 * 1024;
 
 function formatBytes(n: number) {
   if (n < 1024) return `${n} B`;
@@ -41,74 +37,11 @@ function formatDuration(sec?: number) {
   return `${m}:${String(r).padStart(2, "0")}`;
 }
 
-async function readVideoMeta(
-  file: File
-): Promise<{ durationSec?: number; posterUrl?: string }> {
-  return new Promise((resolve) => {
-    const url = URL.createObjectURL(file);
-    const video = document.createElement("video");
-    video.preload = "metadata";
-    video.muted = true;
-    video.playsInline = true;
-    const cleanup = () => URL.revokeObjectURL(url);
-    const done = (meta: { durationSec?: number; posterUrl?: string }) => {
-      cleanup();
-      resolve(meta);
-    };
-    video.onloadedmetadata = () => {
-      const durationSec = Number.isFinite(video.duration)
-        ? video.duration
-        : undefined;
-      try {
-        video.currentTime = Math.min(0.1, durationSec || 0);
-      } catch {
-        done({ durationSec });
-      }
-      video.onseeked = () => {
-        try {
-          const canvas = document.createElement("canvas");
-          canvas.width = video.videoWidth || 320;
-          canvas.height = video.videoHeight || 180;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) {
-            done({ durationSec });
-            return;
-          }
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          canvas.toBlob(
-            (blob) => {
-              if (!blob) {
-                done({ durationSec });
-                return;
-              }
-              done({
-                durationSec,
-                posterUrl: URL.createObjectURL(blob),
-              });
-            },
-            "image/jpeg",
-            0.7
-          );
-        } catch {
-          done({ durationSec });
-        }
-      };
-    };
-    video.onerror = () => done({});
-    video.src = url;
-  });
-}
-
-function uid() {
-  return `m${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
-}
-
 type Props = {
   language: Lang;
   selectedIds: string[];
   onChange: (ids: string[]) => void;
   disabled?: boolean;
-  canCreateAds?: boolean;
 };
 
 export function MediaPicker({
@@ -116,7 +49,6 @@ export function MediaPicker({
   selectedIds,
   onChange,
   disabled,
-  canCreateAds,
 }: Props) {
   const mediaAssets = useStore((s) => s.mediaAssets);
   const addMediaAsset = useStore((s) => s.addMediaAsset);
@@ -138,62 +70,20 @@ export function MediaPicker({
       const added: string[] = [];
       try {
         for (const original of list) {
-          let file = original;
-          const isImage = file.type.startsWith("image/");
-          const isVideo = file.type.startsWith("video/");
-          if (!isImage && !isVideo) {
-            showToast(t(language, "mediaTypeInvalid"));
+          const result = await ingestMediaFile(original, userId);
+          if (!result.ok) {
+            if (result.reason === "type") showToast(t(language, "mediaTypeInvalid"));
+            else if (result.reason === "size") showToast(`${t(language, "mediaTooLarge")}: ${original.name} (${formatBytes(original.size)})`);
+            else showToast(t(language, "mediaUploadFail"));
             continue;
           }
-          const max = isImage ? IMAGE_MAX : VIDEO_MAX;
-          if (file.size > max) {
+          if (result.cloudError) {
             showToast(
-              `${t(language, "mediaTooLarge")}: ${file.name} (${formatBytes(file.size)})`
+              `${language === "es" ? "No se pudo subir a la nube (se reintentará al publicar)" : "Cloud upload failed (will retry on publish)"}: ${result.cloudError}`
             );
-            continue;
           }
-          if (isImage) file = await toInstagramFriendlyImage(file);
-          const id = uid();
-          try {
-            await saveMediaBlob(id, file);
-          } catch {
-            showToast(t(language, "mediaUploadFail"));
-            continue;
-          }
-          let previewUrl = URL.createObjectURL(file);
-          let durationSec: number | undefined;
-          if (isVideo) {
-            const meta = await readVideoMeta(file);
-            durationSec = meta.durationSec;
-            if (meta.posterUrl) {
-              URL.revokeObjectURL(previewUrl);
-              previewUrl = meta.posterUrl;
-            }
-          }
-          const asset: MediaAsset = {
-            id,
-            kind: isImage ? "image" : "video",
-            name: file.name,
-            size: file.size,
-            mime: file.type || (isImage ? "image/*" : "video/*"),
-            createdAt: new Date().toISOString(),
-            previewUrl,
-            durationSec,
-          };
-          // Upload to public cloud storage so Facebook/Instagram (and the cron) can fetch it
-          if (userId) {
-            try {
-              const cloud = await uploadToCloud(userId, id, file, file.name, asset.mime);
-              asset.url = cloud.url;
-              asset.pathname = cloud.pathname;
-            } catch (err) {
-              showToast(
-                `${language === "es" ? "No se pudo subir a la nube (se reintentará al publicar)" : "Cloud upload failed (will retry on publish)"}: ${err instanceof Error ? err.message : ""}`
-              );
-            }
-          }
-          addMediaAsset(asset);
-          added.push(id);
+          addMediaAsset(result.asset);
+          added.push(result.asset.id);
         }
         if (added.length) {
           onChange([...selectedIds, ...added.filter((id) => !selectedIds.includes(id))]);
@@ -251,11 +141,6 @@ export function MediaPicker({
 
   return (
     <div className="space-y-3">
-      {canCreateAds && (
-        <CreativeStudio language={language} disabled={disabled || uploading} onAttach={async (file) => {
-          if (!await processFiles([file])) throw new Error("attachment_failed");
-        }} />
-      )}
       <div className="flex items-center justify-between gap-2">
         <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
           {t(language, "mediaAttach")}
