@@ -348,6 +348,13 @@ const dict = {
     creativeFalKey: "fal.ai key (videos)",
     creativeOpenAiHelp: "platform.openai.com → API keys. OPENAI_API_KEY on Vercel (the Smart Agent key) also works. Image models may require organization verification.",
     creativeFalHelp: "fal.ai → Dashboard → Keys. Create a fal.ai account. Variable: FAL_KEY. A 5s 720p video is about $0.80 (Kling 4).",
+    source: "Source",
+    attribution: "Attribution",
+    sitesLiveKicker: "Published page",
+    sitesLiveBody:
+      "Public page for life insurance, loans, credit, taxes, and savings. Form submissions appear in Contacts with source “landing”.",
+    sitesOpenPage: "Open page",
+    sitesDemoNote: "Demo sample data — read only",
   },
   es: {
     platformLanguage: "Idioma de la plataforma:",
@@ -696,6 +703,13 @@ const dict = {
     creativeFalKey: "Clave de fal.ai (videos)",
     creativeOpenAiHelp: "platform.openai.com → API keys. Si OPENAI_API_KEY ya está en Vercel (la del Agente inteligente), también sirve. Los modelos de imagen pueden exigir verificación de la organización.",
     creativeFalHelp: "fal.ai → Dashboard → Keys. Crea una cuenta en fal.ai. Variable: FAL_KEY. Un video de 5 s a 720p cuesta alrededor de 0,80 USD (Kling 4).",
+    source: "Origen",
+    attribution: "Atribución",
+    sitesLiveKicker: "Página publicada",
+    sitesLiveBody:
+      "Página pública de seguros de vida, préstamos, crédito, impuestos y ahorro. Los envíos aparecen en Contactos con origen “landing”.",
+    sitesOpenPage: "Abrir página",
+    sitesDemoNote: "Datos de muestra — solo lectura",
   },
 } as const;
 
