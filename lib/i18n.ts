@@ -354,6 +354,7 @@ const dict = {
     sitesLiveBody:
       "Public page for life insurance, loans, credit, taxes, and savings. Form submissions appear in Contacts with source “landing”.",
     sitesOpenPage: "Open page",
+    sitesEditPage: "Edit landing",
     sitesDemoNote: "Demo sample data — read only",
   },
   es: {
@@ -709,6 +710,7 @@ const dict = {
     sitesLiveBody:
       "Página pública de seguros de vida, préstamos, crédito, impuestos y ahorro. Los envíos aparecen en Contactos con origen “landing”.",
     sitesOpenPage: "Abrir página",
+    sitesEditPage: "Editar landing",
     sitesDemoNote: "Datos de muestra — solo lectura",
   },
 } as const;
