@@ -1,3 +1,4 @@
+import { postText } from "../creative/copy";
 import { BUFFER_MSG } from "./messages";
 import {
   isHttpsUrl,
@@ -21,11 +22,13 @@ export type AssetRef = {
   kind: "image" | "video";
   name: string;
   createdAt: string;
+  /** Saved studio caption plus hashtags, when the asset already has them. */
+  text?: string;
 };
 
 /** Creative-studio gallery items Buffer can publish. Only public https URLs are kept. */
 export function studioGalleryAssets(
-  items: { id: string; url: string; kind: "image" | "video"; name: string; createdAt: string }[]
+  items: { id: string; url: string; kind: "image" | "video"; name: string; createdAt: string; caption?: string; hashtags?: string[] }[]
 ): AssetRef[] {
   return items
     .filter((item) => item.url.startsWith("https://"))
@@ -35,6 +38,7 @@ export function studioGalleryAssets(
       kind: item.kind,
       name: item.name,
       createdAt: item.createdAt,
+      text: postText(item.caption, item.hashtags),
     }));
 }
 
@@ -166,7 +170,7 @@ export function pickDailyContent(opts: {
     return {
       kind: "asset",
       refId: asset.id,
-      text: "",
+      text: (asset.text || "").trim(),
       media: [{ url: asset.url!, kind: asset.kind, name: asset.name }],
       names: [asset.name],
       warning: null,

@@ -1,7 +1,9 @@
 import { acquireLock, releaseLock } from "@/lib/kvStore";
-import { invalidKeyImage, invalidKeyVideo } from "./messages";
+import { invalidKeyImage, invalidKeyVideo, missingCopyKey } from "./messages";
 import { downloadRemote, isPublicHttps } from "./remote";
 import { generateImage, pollVideo, ProviderError, submitVideo, uploadReferenceImage } from "./providers";
+import { generateCreativeCopy, type CreativeCopy } from "./copyAi";
+import { parseHashtags } from "./copy";
 import { buildCreativePrompt, normalizeStyle } from "./prompt";
 import {
   clearPending,
@@ -10,6 +12,7 @@ import {
   getJob,
   listAssets,
   removeAssetRecord,
+  patchAsset,
   saveAsset,
   saveJob,
   sweepPending,
@@ -28,6 +31,8 @@ type Parsed = {
   aspectRatio: string;
   durationSec: 5 | 10;
   photo?: Buffer;
+  groupId?: string;
+  lang: "es" | "en";
 };
 
 const text = (es: string, en: string): Bilingual => ({ es, en });
@@ -70,7 +75,9 @@ export function parseGenerateBody(body: unknown): Parsed {
       throw new CreativeRequestError(400, "invalid_photo", text("La imagen de referencia no es válida.", "The reference image is not valid."));
     }
   }
-  return { kind, prompt, style: normalizeStyle(record.style), aspectRatio, durationSec: duration, photo };
+  const groupId = typeof record.groupId === "string" && /^[0-9a-f-]{36}$/i.test(record.groupId) ? record.groupId : undefined;
+  const lang = record.lang === "en" ? "en" : "es";
+  return { kind, prompt, style: normalizeStyle(record.style), aspectRatio, durationSec: duration, photo, groupId, lang };
 }
 
 function toPublic(asset: StoredCreativeAsset): CreativeAsset {
@@ -87,6 +94,9 @@ function toPublic(asset: StoredCreativeAsset): CreativeAsset {
     size: asset.size,
     provider: asset.provider,
     createdAt: asset.createdAt,
+    caption: asset.caption || "",
+    hashtags: Array.isArray(asset.hashtags) ? asset.hashtags : [],
+    groupId: asset.groupId || asset.id,
   };
 }
 
@@ -114,6 +124,9 @@ async function materialize(
     aspectRatio: string;
     durationSec?: number;
     provider: CreativeAsset["provider"];
+    caption?: string;
+    hashtags?: string[];
+    groupId?: string;
   },
   bytes: Buffer,
   mime: string
@@ -135,6 +148,9 @@ async function materialize(
     size: bytes.length,
     provider: job.provider,
     createdAt: new Date().toISOString(),
+    caption: job.caption || "",
+    hashtags: job.hashtags || [],
+    groupId: job.groupId || id,
   };
   await saveAsset(asset);
   const extra = await trimAssets(userId);
@@ -185,11 +201,24 @@ async function hostReference(userId: string, photo: Buffer, keys: Keys): Promise
   return uploadReferenceImage(photo, keys.fal);
 }
 
+async function writeCopy(input: Parsed, keys: Keys): Promise<CreativeCopy> {
+  return generateCreativeCopy({
+    prompt: input.prompt,
+    kind: input.kind,
+    style: input.style,
+    lang: input.lang,
+    mock: keys.mock,
+  });
+}
+
 export async function startGeneration(
   userId: string,
   input: Parsed,
   keys: Keys
-): Promise<{ status: "succeeded"; asset: CreativeAsset } | { status: "pending"; job: string }> {
+): Promise<
+  | { status: "succeeded"; asset: CreativeAsset; copyWarning: Bilingual | null }
+  | { status: "pending"; job: string; caption: string; hashtags: string[]; copyWarning: Bilingual | null }
+> {
   if (input.kind === "image" && !keys.imageReady) {
     throw new CreativeRequestError(503, "missing_key", keys.config.messages.image || text("Falta la clave de OpenAI.", "The OpenAI key is missing."));
   }
@@ -207,8 +236,9 @@ export async function startGeneration(
       const provider = keys.mock ? "mock" : "openai";
       const image = await generateImage(provider, { prompt: provider === "mock" ? input.prompt : styled, aspectRatio: input.aspectRatio }, keys.openai);
       const file = await bytesFromResult({ bytes: image.bytes, url: image.remoteUrl, mime: image.mime }, "image");
-      const asset = await materialize(userId, { ...input, provider }, file.bytes, file.mime);
-      return { status: "succeeded", asset };
+      const copy = await writeCopy(input, keys);
+      const asset = await materialize(userId, { ...input, provider, caption: copy.caption, hashtags: copy.hashtags, groupId: input.groupId }, file.bytes, file.mime);
+      return { status: "succeeded", asset, copyWarning: copy.warning };
     } catch (error) {
       if (error instanceof ProviderError) throw providerCopy(error, "image");
       throw error;
@@ -222,6 +252,7 @@ export async function startGeneration(
   }
   try {
     const referenceUrl = input.photo ? await hostReference(userId, input.photo, keys) : undefined;
+    const copy = await writeCopy(input, keys);
     const provider = keys.mock ? "mock" : "fal";
     const remote = await submitVideo(
       provider,
@@ -249,12 +280,15 @@ export async function startGeneration(
       statusUrl: remote.statusUrl,
       responseUrl: remote.responseUrl,
       readyAt: remote.readyAt,
+      caption: copy.caption,
+      hashtags: copy.hashtags,
+      groupId: input.groupId,
       createdAt: now,
       updatedAt: now,
     };
     await saveJob(job);
     await trackPending(userId, job.id);
-    return { status: "pending", job: job.id };
+    return { status: "pending", job: job.id, caption: copy.caption, hashtags: copy.hashtags, copyWarning: copy.warning };
   } catch (error) {
     if (error instanceof ProviderError) throw providerCopy(error, "video");
     throw error;
@@ -309,7 +343,12 @@ export async function readGeneration(userId: string, jobId: string, keys: Keys):
       if (asset) return { status: "succeeded", asset: toPublic(asset) };
     }
     const file = await bytesFromResult(poll, "video");
-    const asset = await materialize(userId, { ...job, provider: job.provider }, file.bytes, file.mime);
+    const asset = await materialize(
+      userId,
+      { ...job, provider: job.provider, caption: job.caption, hashtags: job.hashtags, groupId: job.groupId },
+      file.bytes,
+      file.mime
+    );
     await saveJob({ ...job, status: "succeeded", assetId: asset.id, updatedAt: new Date().toISOString() });
     await clearPending(userId, job.id);
     return { status: "succeeded", asset };
@@ -323,4 +362,32 @@ export async function readGeneration(userId: string, jobId: string, keys: Keys):
 
 export function configOf(keys: Keys): CreativeConfig {
   return keys.config;
+}
+
+export async function refreshCreativeCopy(userId: string, id: string, keys: Keys, lang: "es" | "en"): Promise<{ asset: CreativeAsset; copyWarning: Bilingual | null }> {
+  const current = await getAsset(userId, id);
+  if (!current) throw new CreativeRequestError(404, "not_found", text("No encontramos esa creación.", "We could not find that creation."));
+  const copy = await generateCreativeCopy({
+    prompt: current.prompt,
+    kind: current.kind,
+    style: current.style,
+    lang,
+    mock: keys.mock,
+  });
+  if (!copy.caption && copy.warning) {
+    const missing = copy.warning.es === missingCopyKey.es;
+    throw new CreativeRequestError(missing ? 503 : 502, missing ? "missing_key" : "provider_error", copy.warning);
+  }
+  const saved = await patchAsset(userId, id, { caption: copy.caption, hashtags: copy.hashtags });
+  if (!saved) throw new CreativeRequestError(404, "not_found", text("No encontramos esa creación.", "We could not find that creation."));
+  return { asset: toPublic(saved), copyWarning: copy.warning };
+}
+
+export async function saveCreativeCopy(userId: string, id: string, caption: string, hashtagsRaw: string): Promise<CreativeAsset> {
+  const saved = await patchAsset(userId, id, {
+    caption: caption.trim().slice(0, 1800),
+    hashtags: parseHashtags(hashtagsRaw),
+  });
+  if (!saved) throw new CreativeRequestError(404, "not_found", text("No encontramos esa creación.", "We could not find that creation."));
+  return toPublic(saved);
 }

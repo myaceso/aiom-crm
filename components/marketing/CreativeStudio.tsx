@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Download, Film, ImageIcon, Loader2, Sparkles, Trash2 } from "lucide-react";
+import { parseHashtags } from "@/lib/creative/copy";
 import type { CreativeAsset, CreativeConfig, CreativeKind } from "@/lib/creative/types";
 import { IMAGE_ASPECTS, VIDEO_ASPECTS } from "@/lib/creative/types";
 import type { Lang } from "@/lib/types";
@@ -130,6 +131,9 @@ export function CreativeStudio({
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [caption, setCaption] = useState("");
+  const [hashtags, setHashtags] = useState("");
+  const [copyWarning, setCopyWarning] = useState("");
   const controller = useRef<AbortController | null>(null);
 
   useEffect(() => () => controller.current?.abort(), []);
@@ -166,6 +170,25 @@ export function CreativeStudio({
     setFlyerUrl("");
   }
 
+  function applyAsset(asset: CreativeAsset, warning = "") {
+    setResult(asset);
+    setCaption(asset.caption || "");
+    setHashtags((asset.hashtags || []).join(" "));
+    setCopyWarning(warning);
+    setPrompt(asset.prompt || "");
+    setStyle(asset.style || "");
+    setKind(asset.kind);
+    if (asset.aspectRatio) setAspectRatio(asset.aspectRatio);
+    if (asset.durationSec === 10 || asset.durationSec === 5) setDuration(asset.durationSec);
+    setGallery((items) => [asset, ...items.filter((item) => item.id !== asset.id)]);
+  }
+
+  function warnText(data: { copyWarning?: { es?: string; en?: string } | null }) {
+    const warning = data.copyWarning;
+    if (!warning) return "";
+    return language === "en" ? warning.en || warning.es || "" : warning.es || "";
+  }
+
   async function rememberImage(asset: CreativeAsset) {
     if (asset.kind !== "image") {
       setSource(null);
@@ -176,17 +199,25 @@ export function CreativeStudio({
     setSource(await response.blob());
   }
 
-  async function generate() {
+  async function generate(variation = false) {
     const abort = new AbortController();
     controller.current?.abort();
     controller.current = abort;
+    const groupId = variation ? result?.groupId : undefined;
     setBusy(true);
     setError("");
     setNotice("");
-    setResult(null);
-    setSource(null);
-    clearFlyer();
-    setPhase(kind === "video" ? L("Enviando el video…", "Submitting the video…") : L("Generando imagen…", "Generating image…"));
+    if (!variation) {
+      setResult(null);
+      setCaption("");
+      setHashtags("");
+      setCopyWarning("");
+      setSource(null);
+      clearFlyer();
+    }
+    setPhase(variation
+      ? (kind === "video" ? L("Regenerando video…", "Regenerating video…") : L("Regenerando imagen…", "Regenerating image…"))
+      : (kind === "video" ? L("Enviando el video…", "Submitting the video…") : L("Generando imagen…", "Generating image…")));
     setElapsed(0);
     try {
       let photo: string | undefined;
@@ -203,6 +234,8 @@ export function CreativeStudio({
           aspectRatio,
           duration,
           photo,
+          groupId,
+          lang: language,
         }),
       });
       const data = await started.json().catch(() => ({}));
@@ -211,10 +244,16 @@ export function CreativeStudio({
         return;
       }
       if (data.status === "succeeded" && data.asset) {
-        setResult(data.asset);
+        applyAsset(data.asset, warnText(data));
         await rememberImage(data.asset);
         await loadGallery();
+        window.dispatchEvent(new Event("enone-creative-updated"));
         return;
+      }
+      if (typeof data.caption === "string") {
+        setCaption(data.caption);
+        setHashtags(Array.isArray(data.hashtags) ? data.hashtags.join(" ") : "");
+        setCopyWarning(warnText(data));
       }
       const job = data.job as string;
       for (let attempt = 0; attempt < 100 && !abort.signal.aborted; attempt++) {
@@ -242,8 +281,9 @@ export function CreativeStudio({
           return;
         }
         if (view.asset) {
-          setResult(view.asset);
+          applyAsset(view.asset, warnText(view));
           await loadGallery();
+          window.dispatchEvent(new Event("enone-creative-updated"));
           return;
         }
         setError(L("No se pudo leer el resultado.", "Could not read the result."));
@@ -292,12 +332,66 @@ export function CreativeStudio({
     }
   }
 
+  async function persistCopy(asset: CreativeAsset, nextCaption = caption, nextTags = hashtags) {
+    const response = await fetch(endpoint, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: asset.id, caption: nextCaption, hashtags: nextTags }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.asset) throw new Error("save");
+    setGallery((items) => items.map((item) => (item.id === data.asset.id ? data.asset : item)));
+    setResult((current) => (current?.id === data.asset.id ? data.asset : current));
+    window.dispatchEvent(new Event("enone-creative-updated"));
+    return data.asset as CreativeAsset;
+  }
+
+  async function regenCopy() {
+    if (!result) return;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "copy", id: result.id, lang: language }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.asset) {
+        setError(apiText(data));
+        return;
+      }
+      applyAsset(data.asset, warnText(data));
+      window.dispatchEvent(new Event("enone-creative-updated"));
+    } catch {
+      setError(L("No se pudo regenerar el texto.", "Could not regenerate the text."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyText(value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setNotice(L("Copiado.", "Copied."));
+    } catch {
+      setError(L("No se pudo copiar.", "Could not copy."));
+    }
+  }
+
   async function attachItem(item: UseItem) {
     setError("");
     setNotice("");
     setBusy(true);
     try {
-      await onUseInPost(item);
+      let next = item;
+      if (item.asset && item.asset.id === result?.id) {
+        const saved = await persistCopy(item.asset);
+        next = { ...item, asset: saved };
+      }
+      await onUseInPost(next);
       setNotice(L("Quedó en el compositor de la publicación.", "Added to the post composer."));
     } catch {
       setError(L("No se pudo adjuntar a la publicación.", "Could not attach it to the post."));
@@ -313,14 +407,27 @@ export function CreativeStudio({
       setError(L("No se pudo borrar.", "Could not delete it."));
       return;
     }
-    setGallery((items) => items.filter((item) => item.id !== id));
-    if (result?.id === id) setResult(null);
+    const rest = gallery.filter((item) => item.id !== id);
+    setGallery(rest);
+    if (result?.id === id) {
+      const sibling = rest.find((item) => item.groupId && item.groupId === result.groupId);
+      if (sibling) {
+        applyAsset(sibling);
+        void rememberImage(sibling);
+      } else {
+        setResult(null);
+        setCaption("");
+        setHashtags("");
+      }
+    }
   }
 
   const aspects = kind === "image" ? IMAGE_ASPECTS : VIDEO_ASPECTS;
   const previewUrl = flyerUrl || result?.url || "";
   const imageMissing = config && !config.image && kind === "image";
   const videoMissing = config && !config.video && kind === "video";
+  const variations = result ? gallery.filter((item) => item.groupId && item.groupId === result.groupId) : [];
+  const hashtagList = parseHashtags(hashtags);
 
   return (
     <section id="estudio-creativo" aria-label={L("Estudio creativo", "Creative studio")} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
@@ -353,6 +460,11 @@ export function CreativeStudio({
       {videoMissing && (
         <p role="alert" className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
           {pick(language, config?.messages.video)}
+        </p>
+      )}
+      {config?.messages.copy && (
+        <p role="alert" className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+          {pick(language, config.messages.copy)}
         </p>
       )}
 
@@ -453,6 +565,21 @@ export function CreativeStudio({
             {busy && <Loader2 className="h-4 w-4 animate-spin" />}
             {kind === "image" ? L("Generar imagen", "Generate image") : L("Generar video", "Generate video")}
           </button>
+          {result && (
+            <button
+              type="button"
+              disabled={disabled || busy || !prompt.trim()}
+              onClick={() => void generate(true)}
+              className="inline-flex min-h-[40px] items-center justify-center rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 disabled:opacity-40"
+            >
+              {kind === "image" ? L("Regenerar imagen", "Regenerate image") : L("Regenerar video", "Regenerate video")}
+            </button>
+          )}
+          {result && (
+            <p className="text-xs text-slate-500">
+              {L("Puedes cambiar el prompt y regenerar. La versión anterior se queda hasta que la quites.", "You can tweak the prompt and regenerate. The previous version stays until you remove it.")}
+            </p>
+          )}
           {busy && (
             <p role="status" className="text-sm text-slate-600">
               {phase} {elapsed > 0 ? `· ${elapsed}s` : ""}
@@ -482,9 +609,55 @@ export function CreativeStudio({
                 <Download className="h-4 w-4" />
                 {L("Descargar", "Download")}
               </button>
-              <button type="button" disabled={disabled || busy} className="brand-bg rounded-md px-3 py-2 text-sm font-semibold text-white disabled:opacity-40" onClick={() => void attachItem(flyerFile ? { file: flyerFile } : { asset: result })}>
+              <button type="button" disabled={disabled || busy} className="brand-bg rounded-md px-3 py-2 text-sm font-semibold text-white disabled:opacity-40" onClick={() => void attachItem(flyerFile ? { file: flyerFile, asset: { ...result, caption, hashtags: hashtagList } } : { asset: result })}>
                 {L("Usar en la publicación", "Use in post")}
               </button>
+            </div>
+          )}
+          {variations.length > 1 && (
+            <div>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{L("Variaciones", "Variations")}</p>
+              <div className="flex gap-2 overflow-x-auto">
+                {variations.map((item) => (
+                  <div key={item.id} className={`w-20 shrink-0 overflow-hidden rounded-md border ${item.id === result?.id ? "border-[var(--brand)]" : "border-slate-200"}`}>
+                    <button type="button" className="block w-full" onClick={() => { applyAsset(item); void rememberImage(item); }}>
+                      {item.kind === "video" ? (
+                        <video src={item.url} muted playsInline className="h-16 w-full object-cover" />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={item.url} alt="" className="h-16 w-full object-cover" />
+                      )}
+                    </button>
+                    <button type="button" className="w-full px-1 py-1 text-[10px] font-semibold text-red-700" onClick={() => void remove(item.id)}>
+                      {L("Quitar", "Remove")}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {result && (
+            <div className="space-y-2 rounded-lg border border-slate-200 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{L("Texto viral", "Viral caption")}</p>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" disabled={busy} className="text-xs font-semibold text-[var(--brand)] disabled:opacity-40" onClick={() => void regenCopy()}>
+                    {L("Regenerar texto", "Regenerate text")}
+                  </button>
+                  <button type="button" className="text-xs font-semibold text-slate-600" onClick={() => void copyText(caption)}>
+                    {L("Copiar texto", "Copy text")}
+                  </button>
+                  <button type="button" className="text-xs font-semibold text-slate-600" onClick={() => void copyText(hashtagList.join(" "))}>
+                    {L("Copiar hashtags", "Copy hashtags")}
+                  </button>
+                </div>
+              </div>
+              {copyWarning && <p role="alert" className="text-sm text-amber-800">{copyWarning}</p>}
+              <textarea className={input} rows={5} maxLength={1800} value={caption} onChange={(event) => setCaption(event.target.value)} onBlur={() => { if (result) void persistCopy(result).catch(() => setError(L("No se pudo guardar el texto.", "Could not save the text."))); }} />
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Hashtags
+                <input className={input} value={hashtags} onChange={(event) => setHashtags(event.target.value)} onBlur={() => { if (result) void persistCopy(result).catch(() => setError(L("No se pudo guardar el texto.", "Could not save the text."))); }} />
+              </label>
             </div>
           )}
           {kind === "image" && source && (

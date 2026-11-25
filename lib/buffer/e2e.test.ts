@@ -227,6 +227,36 @@ describe("daily schedule", () => {
     assert.equal(mock.posts.length, 4);
   });
 
+  it("publishes a saved studio caption instead of asking the text model for a new one", async () => {
+    const mock = createMockBuffer();
+    const cfg = blankConfig();
+    cfg.auth = auth([MOCK_IG]);
+    cfg.schedule.enabled = true;
+    cfg.schedule.timezone = "UTC";
+    cfg.schedule.times = ["09:00"];
+    cfg.schedule.mode = "queue";
+    cfg.schedule.source = "gallery";
+    cfg.schedule.channelIds = [MOCK_IG];
+    cfg.schedule.aiCaptions = true;
+    let calls = 0;
+    const saved = "Nadie te dice esto.\n\nCafé en la terraza\n\n#viral #cafe";
+    await runDailyPass({
+      now: new Date("2026-11-25T12:00:00.000Z"),
+      config: cfg,
+      drafts: [],
+      assets: [{ id: "creative:cafe", url: "https://cdn.example.test/cafe.jpg", kind: "image", name: "cafe.jpg", createdAt: "2026-11-02T00:00:00.000Z", text: saved }],
+      resolveToken: async () => "ok-key",
+      clientFor: (token: string) => createBufferClient(token, mock.transport),
+      caption: async () => {
+        calls += 1;
+        return { text: "otro texto", ai: true, warning: null };
+      },
+    });
+    assert.equal(calls, 0);
+    assert.equal(mock.posts[0].input.text, saved);
+    assert.ok(!mock.posts[0].input.aiAssisted);
+  });
+
   it("records a Spanish error once when credentials are missing and does not call Buffer", async () => {
     const mock = createMockBuffer();
     const cfg = blankConfig();

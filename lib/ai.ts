@@ -44,7 +44,10 @@ function sanitizeMessages(messages: ChatMessage[]): ChatMessage[] {
     .slice(-40);
 }
 
-async function callOpenAI(messages: ChatMessage[]): Promise<string> {
+async function callOpenAI(
+  messages: ChatMessage[],
+  options?: { system?: string; temperature?: number }
+): Promise<string> {
   const apiKey = process.env.OPENAI_API_KEY!.trim();
   const base = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(
     /\/$/,
@@ -60,9 +63,9 @@ async function callOpenAI(messages: ChatMessage[]): Promise<string> {
     },
     body: JSON.stringify({
       model,
-      temperature: 0.6,
+      temperature: options?.temperature ?? 0.6,
       messages: [
-        { role: "system", content: AI_SYSTEM_PROMPT },
+        { role: "system", content: options?.system || AI_SYSTEM_PROMPT },
         ...sanitizeMessages(messages),
       ],
     }),
@@ -83,7 +86,10 @@ async function callOpenAI(messages: ChatMessage[]): Promise<string> {
   return content;
 }
 
-async function callAnthropic(messages: ChatMessage[]): Promise<string> {
+async function callAnthropic(
+  messages: ChatMessage[],
+  options?: { system?: string; temperature?: number }
+): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY!.trim();
   const model =
     process.env.ANTHROPIC_MODEL?.trim() || "claude-sonnet-4-20250514";
@@ -98,7 +104,8 @@ async function callAnthropic(messages: ChatMessage[]): Promise<string> {
     body: JSON.stringify({
       model,
       max_tokens: 2048,
-      system: AI_SYSTEM_PROMPT,
+      temperature: options?.temperature ?? 0.6,
+      system: options?.system || AI_SYSTEM_PROMPT,
       messages: sanitizeMessages(messages).map((m) => ({
         role: m.role === "assistant" ? "assistant" : "user",
         content: m.content,
@@ -141,5 +148,26 @@ export async function generateAiReply(messages: ChatMessage[]): Promise<{
     provider === "openai"
       ? await callOpenAI(messages)
       : await callAnthropic(messages);
+  return { content, provider };
+}
+
+/** Same OpenAI/Anthropic keys as the Smart Agent, with a caller-supplied system prompt. */
+export async function generateAiText(input: {
+  system: string;
+  user: string;
+  temperature?: number;
+}): Promise<{ content: string; provider: "openai" | "anthropic" }> {
+  const provider = resolveAiProvider();
+  if (!provider) {
+    const err = new Error("ai_not_configured");
+    (err as Error & { code: string }).code = "ai_not_configured";
+    throw err;
+  }
+  const options = { system: input.system, temperature: input.temperature ?? 0.8 };
+  const messages: ChatMessage[] = [{ role: "user", content: input.user }];
+  const content =
+    provider === "openai"
+      ? await callOpenAI(messages, options)
+      : await callAnthropic(messages, options);
   return { content, provider };
 }

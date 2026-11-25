@@ -38,6 +38,7 @@ import {
 import { CreativeStudio } from "@/components/marketing/CreativeStudio";
 import { ensureCloudMedia } from "@/lib/mediaCloud";
 import { ingestMediaFile } from "@/lib/attachMedia";
+import { postText } from "@/lib/creative/copy";
 import type { CreativeAsset } from "@/lib/creative/types";
 import { normalizeProfileUrl } from "@/lib/social";
 import { BufferPanel } from "@/components/marketing/BufferPanel";
@@ -141,9 +142,11 @@ export default function MarketingPage() {
   }
 
   async function useGenerated(item: { file?: File; asset?: CreativeAsset }) {
+    const caption = item.asset ? postText(item.asset.caption, item.asset.hashtags) : "";
+    if (caption) setBody(caption);
     const attached = (id: string) => {
       setMediaIds((ids) => (ids.includes(id) ? ids : [...ids, id]));
-      showToast(L("Listo en el compositor. Elige la red y publica o programa.", "Added to the composer. Pick a network, then publish or schedule."));
+      showToast(L("Listo en el compositor. El texto viral ya está en la publicación.", "Added to the composer. The viral caption is in the post."));
       document.getElementById("post-composer")?.scrollIntoView({ behavior: "smooth", block: "start" });
     };
     if (item.asset && item.asset.url.startsWith("https://") && !item.file) {

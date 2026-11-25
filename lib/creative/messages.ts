@@ -20,6 +20,16 @@ export const invalidKeyImage: Bilingual = {
   en: "The OpenAI key was rejected. Check it in Integrations or in the OPENAI_API_KEY variable.",
 };
 
+export const missingCopyKey: Bilingual = {
+  es: "Para el texto viral y los hashtags agrega OPENAI_API_KEY o ANTHROPIC_API_KEY en Vercel (las mismas claves del Agente inteligente).",
+  en: "For the viral caption and hashtags, add OPENAI_API_KEY or ANTHROPIC_API_KEY on Vercel (the same keys as the Smart Agent).",
+};
+
+export const copyFailed: Bilingual = {
+  es: "No se pudo escribir el texto viral. La imagen o el video sí se guardaron. Puedes regenerar solo el texto.",
+  en: "The viral caption could not be written. The image or video was still saved. You can regenerate just the text.",
+};
+
 export const invalidKeyVideo: Bilingual = {
   es: "La clave de fal.ai fue rechazada. Revísala en Integraciones o en la variable FAL_KEY.",
   en: "The fal.ai key was rejected. Check it in Integrations or in the FAL_KEY variable.",
