@@ -184,6 +184,17 @@ describe("daily schedule", () => {
     });
     assert.equal(fromStudio?.refId, studio[0].id);
     assert.equal(fromStudio?.media[0].url, "https://blob.example.test/estudio.jpg");
+    const pinnedFirst = pickDailyContent({
+      source: "drafts",
+      drafts,
+      assets: studio,
+      usedDraftIds: [],
+      usedAssetIds: [],
+      pinnedIds: ["66666666-7777-8888-9999-aaaaaaaaaaaa"],
+    });
+    assert.equal(pinnedFirst?.kind, "asset");
+    assert.equal(pinnedFirst?.refId, studio[0].id);
+    assert.equal(pinnedFirst?.media[0].name, "estudio.jpg");
   });
 
   it("sends one daily post per due slot and does not repeat it the same day", async () => {

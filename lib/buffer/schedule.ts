@@ -113,12 +113,26 @@ function byCreated(a: { createdAt: string }, b: { createdAt: string }) {
   return +new Date(a.createdAt) - +new Date(b.createdAt);
 }
 
+export function pinDailyAsset(schedule: BufferDailySchedule, assetId: string, channelIds: string[]): BufferDailySchedule {
+  const id = assetId.replace(/^creative:/, "").trim();
+  const pinned = schedule.pinnedAssetIds.includes(id) ? schedule.pinnedAssetIds : [...schedule.pinnedAssetIds, id].slice(0, 40);
+  return {
+    ...schedule,
+    enabled: true,
+    times: schedule.times.length ? schedule.times : ["09:00"],
+    source: schedule.source === "drafts" ? "both" : schedule.source,
+    channelIds: channelIds.length ? channelIds : schedule.channelIds,
+    pinnedAssetIds: pinned,
+  };
+}
+
 export function pickDailyContent(opts: {
   source: BufferDailySchedule["source"];
   drafts: DraftRef[];
   assets: AssetRef[];
   usedDraftIds: string[];
   usedAssetIds: string[];
+  pinnedIds?: string[];
 }): PickedContent | null {
   const usedDrafts = new Set(opts.usedDraftIds);
   const usedAssets = new Set(opts.usedAssetIds);
@@ -137,6 +151,26 @@ export function pickDailyContent(opts: {
     )
     .sort(byCreated);
   const assetById = new Map(opts.assets.map((a) => [a.id, a]));
+
+  const pinOrder = opts.pinnedIds || [];
+  const pinRank = (id: string) => {
+    const bare = id.replace(/^creative:/, "");
+    const index = pinOrder.findIndex((pin) => pin === id || pin === bare || `creative:${pin}` === id);
+    return index === -1 ? 9999 : index;
+  };
+  const pinned = [...assets].filter((asset) => pinRank(asset.id) < 9999).sort((a, b) => pinRank(a.id) - pinRank(b.id));
+  if (pinned.length && pinned[0].url && isHttpsUrl(pinned[0].url)) {
+    const asset = pinned[0];
+    const url = asset.url as string;
+    return {
+      kind: "asset",
+      refId: asset.id,
+      text: (asset.text || "").trim(),
+      media: [{ url, kind: asset.kind, name: asset.name }],
+      names: [asset.name],
+      warning: null,
+    };
+  }
 
   const takeDraft = opts.source === "drafts" || opts.source === "both";
   const takeAsset = opts.source === "gallery" || opts.source === "both";

@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   if (!body || typeof body !== "object") return NextResponse.json({ error: "Solicitud inválida" }, { status: 400 });
   try {
     const result = await sendBufferPost(auth.user.id, body);
-    return NextResponse.json(result, { status: result.ok ? 200 : 400 });
+    return NextResponse.json(result, { status: result.ok || result.pinned ? 200 : 400 });
   } catch (e) {
     const err = bufferErrorBody(e);
     return NextResponse.json({ error: err.error }, { status: err.status });
