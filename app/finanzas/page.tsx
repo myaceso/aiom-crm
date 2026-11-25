@@ -16,9 +16,5 @@ export const metadata: Metadata = {
 };
 
 export default function FinanzasPage() {
-  return (
-    <div lang="es">
-      <FinanzasLanding />
-    </div>
-  );
+  return <FinanzasLanding />;
 }

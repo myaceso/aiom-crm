@@ -40,6 +40,13 @@ const ERRORS: Record<string, string> = {
   unavailable: "Ahora no pudimos guardar tu solicitud. Inténtalo de nuevo en un momento.",
 };
 
+const FACTS = [
+  { value: String(LANDING_SERVICES.length), label: "servicios en un solo lugar" },
+  { value: "Español", label: "te lo explicamos con calma" },
+  { value: "Atlanta", label: "personas y negocios de Georgia" },
+  { value: "Sin costo", label: "enviar este formulario" },
+] as const;
+
 type Utm = {
   source: string;
   medium: string;
@@ -70,23 +77,25 @@ function ContactChip({
   href: string | null;
 }) {
   const className =
-    "inline-flex min-h-11 max-w-full items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium text-[#0f172a]";
+    "inline-flex min-h-12 max-w-full items-center gap-2 rounded-full border px-4 py-2 text-base font-medium text-white";
   const inner = (
     <>
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-[#8a6a12]">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#FFC72C]">
         {label}
       </span>
       <span className="truncate">{display}</span>
     </>
   );
   if (!href) {
-    return <span className={`${className} border-dashed border-[#e4d7a8] bg-[#fffaf0]`}>{inner}</span>;
+    return (
+      <span className={`${className} border-dashed border-[#FFC72C]/45 bg-white/5`}>{inner}</span>
+    );
   }
   const external = href.startsWith("http");
   return (
     <a
       href={href}
-      className={`${className} border-[#FFC72C] bg-white hover:bg-[#fff6d8]`}
+      className={`${className} border-[#FFC72C]/70 bg-white/10 hover:bg-white/15`}
       {...(external ? { target: "_blank", rel: "noreferrer" } : {})}
     >
       {inner}
@@ -95,7 +104,7 @@ function ContactChip({
 }
 
 const fieldClass =
-  "mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-base text-[#0f172a] outline-none ring-[#FFC72C] placeholder:text-slate-400 focus:border-[#FFC72C] focus:ring-2";
+  "mt-2 w-full rounded-2xl border border-white/15 bg-[#0c1220] px-4 py-3.5 text-lg text-white outline-none placeholder:text-slate-500 focus:border-[#FFC72C] focus:ring-2 focus:ring-[#FFC72C]/40";
 
 export default function FinanzasLanding() {
   const tel = phoneHref();
@@ -168,153 +177,169 @@ export default function FinanzasLanding() {
   }
 
   return (
-    <div data-landing="finanzas" className="min-h-screen bg-[#fffdf8] text-[#334155]">
-      <header className="sticky top-0 z-30 border-b border-[#f0e6c8] bg-[#fffdf8]/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+    <div data-landing="finanzas" className="relative min-h-screen overflow-x-clip bg-[#07090f] text-[#e7ebf3]">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[42rem] overflow-hidden">
+        <div className="absolute -left-24 top-10 h-[28rem] w-[28rem] rounded-full bg-[#FFC72C]/20 blur-[110px]" />
+        <div className="absolute right-[-6rem] top-40 h-[24rem] w-[24rem] rounded-full bg-[#FFC72C]/10 blur-[120px]" />
+      </div>
+
+      <header className="sticky top-0 z-30 border-b border-white/10 bg-[#07090f]/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3.5 sm:px-6">
           <a href="#inicio" className="min-w-0">
-            <span className="block truncate text-sm font-semibold leading-tight text-[#0f172a] sm:text-base">
+            <span className="fin-display block truncate text-lg font-extrabold leading-tight tracking-tight text-white sm:text-xl">
               {LANDING_BRAND}
             </span>
-            <span className="block text-[11px] font-medium text-[#8a6a12]">{LANDING_AREA}</span>
+            <span className="mt-0.5 block text-sm font-medium text-[#FFC72C]">{LANDING_AREA}</span>
           </a>
           <a
             href="#contacto"
-            className="inline-flex min-h-11 shrink-0 items-center rounded-full bg-[#FFC72C] px-4 text-sm font-semibold text-[#0f172a] shadow-sm"
+            className="fin-cta inline-flex shrink-0 items-center rounded-full bg-[#FFC72C] px-5 text-base font-bold text-[#111318] sm:px-6 sm:text-lg"
           >
             Contactar
           </a>
         </div>
       </header>
 
-      <main id="inicio">
-        <section className="relative overflow-hidden bg-[#0f172a] text-white">
-          <div className="pointer-events-none absolute -right-10 -top-16 h-56 w-56 rounded-full bg-[#FFC72C]/25 blur-3xl" />
-          <div className="pointer-events-none absolute bottom-0 left-0 h-1 w-full bg-[#FFC72C]" />
-          <div className="mx-auto max-w-6xl px-4 py-14 sm:py-20">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#FFC72C]">
-              {LANDING_AREA}
-            </p>
-            <h1 className="mt-3 max-w-3xl text-4xl font-semibold leading-[1.1] tracking-tight text-white sm:text-6xl">
-              Ordena tu dinero con alguien que te habla claro
-            </h1>
-            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-200 sm:text-lg">
-              Seguros de vida, préstamos, crédito, impuestos y ahorro para personas y
-              negocios. En español, sin presión y sin prometer una aprobación.
-            </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <a
-                href="#contacto"
-                className="inline-flex min-h-12 items-center justify-center rounded-full bg-[#FFC72C] px-6 text-base font-semibold text-[#0f172a]"
-              >
-                Quiero que me contacten
-              </a>
-              <a
-                href="#servicios"
-                className="inline-flex min-h-12 items-center justify-center rounded-full border border-white/20 px-6 text-base font-semibold text-white"
-              >
-                Ver servicios
-              </a>
-            </div>
-            <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-              <ContactChip label="Teléfono" display={LANDING_CONTACT.phoneDisplay} href={tel} />
-              <ContactChip label="WhatsApp" display={LANDING_CONTACT.whatsappDisplay} href={wa} />
-            </div>
+      <main id="inicio" className="relative">
+        <section className="mx-auto max-w-6xl px-4 pb-12 pt-12 sm:px-6 sm:pb-16 sm:pt-16">
+          <p className="fin-rise text-sm font-semibold uppercase tracking-[0.22em] text-[#FFC72C] sm:text-base">
+            {LANDING_AREA}
+          </p>
+          <h1 className="fin-hero-title fin-rise fin-d1 mt-4 max-w-5xl text-white">
+            Ordena tu dinero con alguien que te <span className="fin-gold">habla claro</span>
+          </h1>
+          <p className="fin-lead fin-rise fin-d2 mt-6 max-w-2xl text-slate-300">
+            Seguros de vida, préstamos, crédito, impuestos y ahorro para personas y negocios. En
+            español, sin presión y sin prometer una aprobación.
+          </p>
+          <div className="fin-rise fin-d3 mt-8 flex flex-col gap-3 sm:flex-row">
+            <a
+              href="#contacto"
+              className="fin-cta inline-flex items-center justify-center rounded-full bg-[#FFC72C] px-8 text-lg font-bold text-[#111318]"
+            >
+              Quiero que me contacten
+            </a>
+            <a
+              href="#servicios"
+              className="inline-flex min-h-[3.6rem] items-center justify-center rounded-full border border-white/20 bg-white/5 px-8 text-lg font-semibold text-white hover:border-[#FFC72C]/50"
+            >
+              Ver servicios
+            </a>
+          </div>
+          <div className="fin-rise fin-d4 mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <ContactChip label="Teléfono" display={LANDING_CONTACT.phoneDisplay} href={tel} />
+            <ContactChip label="WhatsApp" display={LANDING_CONTACT.whatsappDisplay} href={wa} />
           </div>
         </section>
 
-        <section id="servicios" className="scroll-mt-20 mx-auto max-w-6xl px-4 py-14 sm:py-16">
-          <h2 className="text-2xl font-semibold tracking-tight text-[#0f172a] sm:text-3xl">
-            Cómo podemos ayudarte
-          </h2>
-          <p className="mt-2 max-w-2xl text-base leading-7 text-slate-600">
+        <section className="border-y border-white/10 bg-white/[0.03]">
+          <div className="mx-auto grid max-w-6xl grid-cols-2 gap-px sm:grid-cols-4">
+            {FACTS.map((fact) => (
+              <div key={fact.value} className="px-4 py-6 sm:px-6 sm:py-8">
+                <p className="fin-display text-3xl font-extrabold tracking-tight text-[#FFC72C] sm:text-4xl">
+                  {fact.value}
+                </p>
+                <p className="mt-1 text-base leading-snug text-slate-300 sm:text-lg">{fact.label}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section id="servicios" className="scroll-mt-24 mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
+          <h2 className="fin-h2 max-w-3xl text-white">Cómo podemos ayudarte</h2>
+          <p className="fin-lead mt-4 max-w-2xl text-slate-300">
             Elige el tema que te urge hoy. En la conversación vemos si encaja y qué sigue.
           </p>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {LANDING_SERVICES.map((serviceItem) => {
+            {LANDING_SERVICES.map((serviceItem, index) => {
               const Icon = ICONS[serviceItem.id];
               return (
                 <article
                   key={serviceItem.id}
-                  className="rounded-2xl border border-[#f0e6c8] bg-white p-5 shadow-card"
+                  className="fin-card fin-rise rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.07] to-white/[0.03] p-6 shadow-[0_16px_40px_rgba(0,0,0,0.28)]"
+                  style={{ animationDelay: `${0.08 * index}s` }}
                 >
-                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#fff4cc] text-[#0f172a]">
-                    <Icon className="h-5 w-5" aria-hidden="true" />
+                  <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFC72C] text-[#111318] shadow-[0_8px_24px_rgba(255,199,44,0.28)]">
+                    <Icon className="h-7 w-7" aria-hidden="true" />
                   </span>
-                  <h3 className="mt-4 text-lg font-semibold text-[#0f172a]">{serviceItem.label}</h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{serviceItem.summary}</p>
+                  <h3 className="fin-display mt-5 text-2xl font-extrabold tracking-tight text-white">
+                    {serviceItem.label}
+                  </h3>
+                  <p className="mt-3 text-lg leading-relaxed text-slate-300">{serviceItem.summary}</p>
                 </article>
               );
             })}
           </div>
         </section>
 
-        <section className="bg-[#0f172a] text-white">
-          <div className="mx-auto max-w-6xl px-4 py-14 sm:py-16">
-            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Por qué hablar con nosotros</h2>
+        <section className="border-y border-white/10 bg-[#0c1018]">
+          <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
+            <h2 className="fin-h2 text-white">Por qué hablar con nosotros</h2>
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
               {LANDING_BENEFITS.map((item) => (
-                <article key={item.title} className="rounded-2xl border border-white/10 bg-white/5 p-5">
-                  <HeartHandshake className="h-5 w-5 text-[#FFC72C]" aria-hidden="true" />
-                  <h3 className="mt-3 text-lg font-semibold text-white">{item.title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-300">{item.body}</p>
+                <article
+                  key={item.title}
+                  className="fin-card rounded-3xl border border-white/10 bg-white/[0.04] p-6"
+                >
+                  <HeartHandshake className="h-7 w-7 text-[#FFC72C]" aria-hidden="true" />
+                  <h3 className="fin-display mt-4 text-2xl font-extrabold tracking-tight text-white">
+                    {item.title}
+                  </h3>
+                  <p className="mt-3 text-lg leading-relaxed text-slate-300">{item.body}</p>
                 </article>
               ))}
             </div>
           </div>
         </section>
 
-        <section className="mx-auto max-w-6xl px-4 py-14 sm:py-16">
-          <h2 className="text-2xl font-semibold tracking-tight text-[#0f172a] sm:text-3xl">
-            Preguntas frecuentes
-          </h2>
-          <div className="mt-6 divide-y divide-[#f0e6c8] overflow-hidden rounded-2xl border border-[#f0e6c8] bg-white">
+        <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
+          <h2 className="fin-h2 text-white">Preguntas frecuentes</h2>
+          <div className="mt-8 divide-y divide-white/10 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03]">
             {LANDING_FAQ.map((item) => (
-              <details key={item.q} className="group px-5 py-1">
-                <summary className="cursor-pointer list-none py-4 text-base font-semibold text-[#0f172a] [&::-webkit-details-marker]:hidden">
+              <details key={item.q} className="group px-5 sm:px-7">
+                <summary className="cursor-pointer list-none py-5 text-lg font-semibold text-white sm:text-xl [&::-webkit-details-marker]:hidden">
                   <span className="flex items-center justify-between gap-4">
                     {item.q}
-                    <span className="text-[#8a6a12] group-open:rotate-45" aria-hidden="true">
+                    <span className="fin-display text-2xl text-[#FFC72C] group-open:rotate-45" aria-hidden="true">
                       +
                     </span>
                   </span>
                 </summary>
-                <p className="pb-4 text-sm leading-6 text-slate-600">{item.a}</p>
+                <p className="pb-5 text-lg leading-relaxed text-slate-300">{item.a}</p>
               </details>
             ))}
           </div>
         </section>
 
-        <section id="contacto" className="scroll-mt-20 bg-[#fff6d8]">
-          <div className="mx-auto grid max-w-6xl gap-8 px-4 py-14 sm:py-16 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+        <section id="contacto" className="scroll-mt-24 border-t border-white/10 bg-[#0c1018]">
+          <div className="mx-auto grid max-w-6xl gap-10 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
             <div>
-              <h2 className="text-2xl font-semibold tracking-tight text-[#0f172a] sm:text-3xl">
-                Cuéntanos qué necesitas
-              </h2>
-              <p className="mt-3 text-base leading-7 text-slate-700">
-                Déjanos tu nombre, teléfono y el servicio. Te contactamos para escuchar tu caso.
-                No hace falta que tengas todos los papeles a la mano.
+              <h2 className="fin-h2 text-white">Cuéntanos qué necesitas</h2>
+              <p className="fin-lead mt-4 text-slate-300">
+                Déjanos tu nombre, teléfono y el servicio. Te contactamos para escuchar tu caso. No
+                hace falta que tengas todos los papeles a la mano.
               </p>
-              <div className="mt-6 flex flex-col gap-2">
+              <div className="mt-8 flex flex-col gap-3">
                 <ContactChip label="Teléfono" display={LANDING_CONTACT.phoneDisplay} href={tel} />
                 <ContactChip label="WhatsApp" display={LANDING_CONTACT.whatsappDisplay} href={wa} />
               </div>
             </div>
 
-            <div className="rounded-3xl border border-[#f0e6c8] bg-white p-5 shadow-card sm:p-7">
+            <div className="rounded-[1.75rem] border border-[#FFC72C]/30 bg-[#101624] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.4)] sm:p-8">
               {done ? (
-                <div role="status" className="py-8 text-center">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8a6a12]">
+                <div role="status" className="py-10 text-center">
+                  <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#FFC72C]">
                     Listo
                   </p>
-                  <h3 className="mt-2 text-2xl font-semibold text-[#0f172a]">
+                  <h3 className="fin-display mt-3 text-4xl font-extrabold tracking-tight text-white">
                     Recibimos tu solicitud
                   </h3>
-                  <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-slate-600">
+                  <p className="fin-lead mx-auto mt-4 max-w-sm text-slate-300">
                     Te contactaremos pronto al teléfono o al correo que nos dejaste.
                   </p>
                 </div>
               ) : (
-                <form onSubmit={onSubmit} className="relative space-y-4" noValidate>
+                <form onSubmit={onSubmit} className="relative space-y-5" noValidate>
                   <div className="absolute -left-[9999px] h-0 w-0 overflow-hidden" aria-hidden="true">
                     <label>
                       Sitio web
@@ -327,7 +352,7 @@ export default function FinanzasLanding() {
                       />
                     </label>
                   </div>
-                  <label className="block text-sm font-semibold text-[#0f172a]">
+                  <label className="block text-base font-semibold text-white">
                     Nombre
                     <input
                       required
@@ -339,7 +364,7 @@ export default function FinanzasLanding() {
                     />
                   </label>
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <label className="block text-sm font-semibold text-[#0f172a]">
+                    <label className="block text-base font-semibold text-white">
                       Teléfono
                       <input
                         required
@@ -352,7 +377,7 @@ export default function FinanzasLanding() {
                         placeholder="Tu número con código de área"
                       />
                     </label>
-                    <label className="block text-sm font-semibold text-[#0f172a]">
+                    <label className="block text-base font-semibold text-white">
                       Correo
                       <input
                         required
@@ -365,7 +390,7 @@ export default function FinanzasLanding() {
                       />
                     </label>
                   </div>
-                  <label className="block text-sm font-semibold text-[#0f172a]">
+                  <label className="block text-base font-semibold text-white">
                     Servicio de interés
                     <select
                       required
@@ -381,7 +406,7 @@ export default function FinanzasLanding() {
                       ))}
                     </select>
                   </label>
-                  <label className="block text-sm font-semibold text-[#0f172a]">
+                  <label className="block text-base font-semibold text-white">
                     Mensaje
                     <textarea
                       value={message}
@@ -392,12 +417,12 @@ export default function FinanzasLanding() {
                       placeholder="Cuéntanos, en pocas líneas, qué estás buscando."
                     />
                   </label>
-                  <label className="flex items-start gap-3 text-sm leading-6 text-slate-700">
+                  <label className="flex items-start gap-3 text-base leading-7 text-slate-300">
                     <input
                       type="checkbox"
                       checked={consent}
                       onChange={(e) => setConsent(e.target.checked)}
-                      className="mt-1 h-5 w-5 shrink-0 accent-[#0f172a]"
+                      className="mt-1.5 h-5 w-5 shrink-0 accent-[#FFC72C]"
                     />
                     <span>
                       Acepto que me contacten sobre el servicio que elegí. Mis datos se usan solo
@@ -405,14 +430,14 @@ export default function FinanzasLanding() {
                     </span>
                   </label>
                   {error && (
-                    <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
+                    <p role="alert" className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-base text-red-200">
                       {error}
                     </p>
                   )}
                   <button
                     type="submit"
                     disabled={busy}
-                    className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#FFC72C] px-6 text-base font-semibold text-[#0f172a] disabled:opacity-60"
+                    className="fin-cta inline-flex w-full items-center justify-center rounded-full bg-[#FFC72C] px-8 text-lg font-bold text-[#111318] disabled:opacity-60"
                   >
                     {busy ? "Enviando…" : "Enviar solicitud"}
                   </button>
@@ -423,24 +448,24 @@ export default function FinanzasLanding() {
         </section>
       </main>
 
-      <footer className="border-t border-[#f0e6c8] bg-white">
-        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-8 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-          <p className="font-medium text-[#0f172a]">{LANDING_BRAND}</p>
+      <footer className="border-t border-white/10 bg-[#07090f]">
+        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-8 text-base text-slate-400 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <p className="fin-display font-bold text-white">{LANDING_BRAND}</p>
           <p>{LANDING_AREA}. Esta página no es una oferta de crédito, seguro ni asesoría fiscal.</p>
         </div>
       </footer>
 
       {!done && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#f0e6c8] bg-[#fffdf8]/95 p-3 backdrop-blur md:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-[#07090f]/92 p-3 backdrop-blur-xl md:hidden">
           <a
             href="#contacto"
-            className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#FFC72C] text-base font-semibold text-[#0f172a]"
+            className="fin-cta inline-flex w-full items-center justify-center rounded-full bg-[#FFC72C] text-lg font-bold text-[#111318]"
           >
             Quiero que me contacten
           </a>
         </div>
       )}
-      {!done && <div className="h-20 md:hidden" aria-hidden="true" />}
+      {!done && <div className="h-24 md:hidden" aria-hidden="true" />}
     </div>
   );
 }
