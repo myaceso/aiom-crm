@@ -6,7 +6,7 @@ import { BUFFER_MSG } from "./messages";
 import { createMockBuffer, MOCK_FB, MOCK_IG } from "./mock";
 import { blankConfig, type BufferAuthRecord } from "./model";
 import { refreshAccessToken } from "./oauth";
-import { dueSlots, pickDailyContent, zonedSlotToUtc } from "./schedule";
+import { dueSlots, pickDailyContent, studioGalleryAssets, zonedSlotToUtc } from "./schedule";
 
 function auth(channelIds: string[]): BufferAuthRecord {
   return {
@@ -169,6 +169,21 @@ describe("daily schedule", () => {
     assert.equal(second?.refId, "g1");
     const none = pickDailyContent({ source: "drafts", drafts, assets, usedDraftIds: ["d1"], usedAssetIds: [] });
     assert.equal(none, null);
+    const studio = studioGalleryAssets([
+      { id: "11111111-2222-3333-4444-555555555555", url: "/api/marketing/creative/file/local", kind: "image", name: "local.jpg", createdAt: "2026-11-04T00:00:00.000Z" },
+      { id: "66666666-7777-8888-9999-aaaaaaaaaaaa", url: "https://blob.example.test/estudio.jpg", kind: "image", name: "estudio.jpg", createdAt: "2026-11-04T00:00:00.000Z" },
+    ]);
+    assert.equal(studio.length, 1);
+    assert.equal(studio[0].id, "creative:66666666-7777-8888-9999-aaaaaaaaaaaa");
+    const fromStudio = pickDailyContent({
+      source: "gallery",
+      drafts: [],
+      assets: studio,
+      usedDraftIds: [],
+      usedAssetIds: [],
+    });
+    assert.equal(fromStudio?.refId, studio[0].id);
+    assert.equal(fromStudio?.media[0].url, "https://blob.example.test/estudio.jpg");
   });
 
   it("sends one daily post per due slot and does not repeat it the same day", async () => {

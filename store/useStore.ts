@@ -25,6 +25,7 @@ import type {
   WhatsAppIntegration,
   TelegramIntegration,
   BufferIntegration,
+  CreativeIntegration,
   MessagingSend,
   SafeUser,
   Session,
@@ -45,8 +46,9 @@ import {
   createSeedEmailTemplates,
   defaultSettings,
   defaultIntegrations,
+  normalizeIntegrations,
 } from "@/lib/seed";
-import { blankBufferIntegration, normalizeIntegrations } from "@/lib/buffer/model";
+import { blankBufferIntegration } from "@/lib/buffer/model";
 import {
   buildConnectedSocial,
   mergeSocialConnections,
@@ -62,6 +64,8 @@ type Store = {
   users: SafeUser[];
   session: Session | null;
   crmReady: boolean;
+  /** Landing contact ids present when this browser last loaded the CRM. */
+  crmLoadedLandingIds: string[] | null;
   loadCrm: () => Promise<void>;
   refreshAuth: () => Promise<void>;
   fetchUsers: () => Promise<void>;
@@ -179,6 +183,8 @@ type Store = {
   disconnectTelegram: () => void;
   connectBuffer: (data: Omit<BufferIntegration, "connected">) => void;
   disconnectBuffer: () => void;
+  connectCreative: (data: Omit<CreativeIntegration, "connected">) => void;
+  disconnectCreative: () => void;
   messagingSends: MessagingSend[];
   addMessagingSend: (s: Omit<MessagingSend, "id" | "createdAt">) => void;
   toast: Toast;
@@ -203,13 +209,14 @@ export const useStore = create<Store>()(
       users: [],
       session: null,
       crmReady: false,
+      crmLoadedLandingIds: null,
       loadCrm: async () => {
         const session = get().session;
         if (!session) {
           set({ crmReady: false });
           return;
         }
-        set({ crmReady: false });
+        set({ crmReady: false, crmLoadedLandingIds: null });
         try {
           const res = await fetch("/api/crm/state", {
             credentials: "include",
@@ -219,14 +226,19 @@ export const useStore = create<Store>()(
           const data = await res.json();
           if (data.state) {
             const state = data.state as CrmState;
+            const contacts = state.contacts || [];
             set({
               ...state,
+              contacts,
               integrations: normalizeIntegrations(state.integrations),
               mediaAssets: (state.mediaAssets || []).map((m) => ({
                 ...m,
                 previewUrl: undefined,
               })),
               crmReady: true,
+              crmLoadedLandingIds: contacts
+                .filter((c) => c.source === "landing")
+                .map((c) => c.id),
             });
           } else {
             set({
@@ -245,6 +257,7 @@ export const useStore = create<Store>()(
               integrations: defaultIntegrations,
               messagingSends: [],
               crmReady: true,
+              crmLoadedLandingIds: [],
             });
             get().ensureSeed();
           }
@@ -364,7 +377,7 @@ export const useStore = create<Store>()(
         } catch {
           /* ignore */
         }
-        set({ session: null, crmReady: false, contacts: [], opportunities: [], conversations: [], appointments: [], activity: [], socialConnections: [], socialPosts: [], mediaAssets: [], smsCampaigns: [], emailCampaigns: [], emailTemplates: [], integrations: defaultIntegrations, messagingSends: [] });
+        set({ session: null, crmReady: false, crmLoadedLandingIds: null, contacts: [], opportunities: [], conversations: [], appointments: [], activity: [], socialConnections: [], socialPosts: [], mediaAssets: [], smsCampaigns: [], emailCampaigns: [], emailTemplates: [], integrations: defaultIntegrations, messagingSends: [] });
       },
       currentUser: () => {
         const s = get();
@@ -834,6 +847,24 @@ export const useStore = create<Store>()(
             buffer: blankBufferIntegration(),
           },
         })),
+      connectCreative: (data) =>
+        set((s) => ({
+          integrations: {
+            ...normalizeIntegrations(s.integrations),
+            creative: {
+              connected: true,
+              openaiApiKey: data.openaiApiKey.trim(),
+              falKey: data.falKey.trim(),
+            },
+          },
+        })),
+      disconnectCreative: () =>
+        set((s) => ({
+          integrations: {
+            ...normalizeIntegrations(s.integrations),
+            creative: { ...defaultIntegrations.creative },
+          },
+        })),
       messagingSends: [],
       addMessagingSend: (entry) =>
         set((s) => ({
@@ -911,15 +942,10 @@ export const useStore = create<Store>()(
           !s.integrations?.email ||
           !s.integrations?.whatsapp ||
           !s.integrations?.telegram ||
-          !s.integrations?.buffer
+          !s.integrations?.buffer ||
+          !s.integrations?.creative
         ) {
-          patch.integrations = normalizeIntegrations({
-            sms: { ...defaultIntegrations.sms, ...(s.integrations?.sms || {}) },
-            email: { ...defaultIntegrations.email, ...(s.integrations?.email || {}) },
-            whatsapp: { ...defaultIntegrations.whatsapp, ...(s.integrations?.whatsapp || {}) },
-            telegram: { ...defaultIntegrations.telegram, ...(s.integrations?.telegram || {}) },
-            buffer: { ...defaultIntegrations.buffer, ...(s.integrations?.buffer || {}) },
-          });
+          patch.integrations = normalizeIntegrations(s.integrations);
         }
         if (!Array.isArray(s.messagingSends)) {
           patch.messagingSends = [];
@@ -982,6 +1008,9 @@ if (typeof window !== "undefined") {
         smsCampaigns: current.smsCampaigns, emailCampaigns: current.emailCampaigns,
         emailTemplates: current.emailTemplates, integrations: current.integrations,
         messagingSends: current.messagingSends,
+        ...(Array.isArray(current.crmLoadedLandingIds)
+          ? { loadedLandingIds: current.crmLoadedLandingIds }
+          : {}),
       };
       try {
         await fetch("/api/crm/state", {

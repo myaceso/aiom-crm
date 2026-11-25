@@ -12,7 +12,7 @@ import type {
   EmailTemplate,
   Integrations,
 } from "./types";
-import { blankBufferIntegration } from "./buffer/model";
+import { blankBufferIntegration, normalizeBufferIntegration } from "./buffer/model";
 
 const now = Date.now();
 const daysAgo = (d: number, h = 10) =>
@@ -309,7 +309,24 @@ export const defaultIntegrations: Integrations = {
     defaultChatId: "",
   },
   buffer: blankBufferIntegration(),
+  creative: {
+    connected: false,
+    openaiApiKey: "",
+    falKey: "",
+  },
 };
+
+export function normalizeIntegrations(raw?: Partial<Integrations> | null): Integrations {
+  const src = raw || {};
+  return {
+    sms: { ...defaultIntegrations.sms, ...src.sms },
+    email: { ...defaultIntegrations.email, ...src.email },
+    whatsapp: { ...defaultIntegrations.whatsapp, ...src.whatsapp },
+    telegram: { ...defaultIntegrations.telegram, ...src.telegram },
+    buffer: normalizeBufferIntegration(src.buffer),
+    creative: { ...defaultIntegrations.creative, ...src.creative },
+  };
+}
 
 export function createSeedSocialPosts(): SocialPost[] {
   return [

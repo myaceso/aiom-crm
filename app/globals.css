@@ -13,6 +13,15 @@ body {
   height: 100%;
 }
 
+/* Public landing scrolls with the document. The CRM shell keeps height: 100%. */
+html:has([data-landing="finanzas"]),
+html:has([data-landing="finanzas"]) body {
+  height: auto;
+  min-height: 100%;
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
 html {
   overflow-x: hidden;
 }

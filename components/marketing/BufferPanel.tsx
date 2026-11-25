@@ -44,6 +44,14 @@ type Schedule = {
   aiBrief: string;
 };
 
+type StudioItem = {
+  id: string;
+  kind: "image" | "video";
+  name: string;
+  url: string;
+  mime: string;
+};
+
 const ZONES = [
   "America/Mexico_City",
   "America/Bogota",
@@ -82,6 +90,8 @@ export function BufferPanel() {
   const [logs, setLogs] = useState<Log[]>([]);
   const [text, setText] = useState("");
   const [mediaIds, setMediaIds] = useState<string[]>([]);
+  const [studio, setStudio] = useState<StudioItem[]>([]);
+  const [studioIds, setStudioIds] = useState<string[]>([]);
   const [channels, setChannels] = useState<string[]>([]);
   const [mode, setMode] = useState<"queue" | "custom" | "now">("queue");
   const [when, setWhen] = useState("");
@@ -117,6 +127,22 @@ export function BufferPanel() {
       const data = await st.json().catch(() => ({}));
       setStatus({ connected: false, accountEmail: "", organizationName: "", channelIds: [], channels: [], error: data.error });
     }
+    const studioRes = await fetch("/api/marketing/creative", { credentials: "include", cache: "no-store" });
+    if (studioRes.ok) {
+      const data = await studioRes.json().catch(() => ({}));
+      const items = Array.isArray(data.gallery) ? data.gallery : [];
+      setStudio(
+        items
+          .filter((item: StudioItem) => item && (item.kind === "image" || item.kind === "video") && typeof item.url === "string")
+          .map((item: StudioItem) => ({
+            id: String(item.id),
+            kind: item.kind,
+            name: String(item.name || "estudio"),
+            url: String(item.url),
+            mime: String(item.mime || ""),
+          }))
+      );
+    }
     if (sch.ok) {
       const data = await sch.json();
       if (data.schedule) {
@@ -140,8 +166,18 @@ export function BufferPanel() {
       showToast(L("Conecta Buffer en Integraciones.", "Connect Buffer in Integrations."));
       return;
     }
-    if (!text.trim() && mediaIds.length === 0) {
+    const pickedStudio = studio.filter((item) => studioIds.includes(item.id));
+    if (!text.trim() && mediaIds.length === 0 && pickedStudio.length === 0) {
       showToast(L("Escribe un texto o adjunta una imagen o un video.", "Write text or attach an image or video."));
+      return;
+    }
+    if (pickedStudio.some((item) => !item.url.startsWith("https://"))) {
+      showToast(
+        L(
+          "Esa creación del estudio no tiene URL pública. Buffer solo publica archivos https.",
+          "That studio creation has no public URL. Buffer only publishes https files."
+        )
+      );
       return;
     }
     if (channels.length === 0) {
@@ -171,6 +207,9 @@ export function BufferPanel() {
         }
         media.push({ url, kind: asset.kind, name: asset.name });
       }
+      for (const item of pickedStudio) {
+        media.push({ url: item.url, kind: item.kind, name: item.name });
+      }
       const res = await fetch("/api/buffer/posts", {
         method: "POST",
         credentials: "include",
@@ -198,6 +237,7 @@ export function BufferPanel() {
       );
       setText("");
       setMediaIds([]);
+      setStudioIds([]);
     } catch {
       showToast(L("No se pudo enviar a Buffer.", "Could not send to Buffer."));
     } finally {
@@ -285,6 +325,31 @@ export function BufferPanel() {
       <div className="mt-3">
         <MediaPicker language={language} selectedIds={mediaIds} onChange={setMediaIds} disabled={busy} />
       </div>
+      {studio.length > 0 && (
+        <div className="mt-3">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {L("Estudio creativo", "Creative studio")}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {studio.map((item) => {
+              const on = studioIds.includes(item.id);
+              const pub = item.url.startsWith("https://");
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setStudioIds((ids) => (ids.includes(item.id) ? ids.filter((id) => id !== item.id) : [...ids, item.id]))}
+                  className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${on ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 text-slate-600"}`}
+                >
+                  {item.kind === "video" ? "Video" : "Imagen"} · {item.name}
+                  {pub ? "" : es ? " · sin URL pública" : " · no public URL"}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <select
           value={mode}
@@ -318,8 +383,8 @@ export function BufferPanel() {
         <h3 className="mb-2 text-sm font-semibold text-slate-800">{L("Automatización diaria", "Daily automation")}</h3>
         <p className="mb-3 text-xs text-slate-500">
           {L(
-            "El cron (cada 5 minutos) envía una pieza por horario: borradores o la galería, a los canales elegidos. Si falta contenido o la clave, el error queda en el historial.",
-            "The cron (every 5 minutes) sends one piece per time slot from drafts or the gallery. Missing content or credentials are recorded in the history."
+            "El cron (cada 5 minutos) envía una pieza por horario: borradores, la galería o las creaciones del estudio con URL pública. Si falta contenido o la clave, el error queda en el historial.",
+            "The cron (every 5 minutes) sends one piece per time slot from drafts, the gallery, or public creative-studio files. Missing content or credentials are recorded in the history."
           )}
         </p>
         <label className="mb-3 flex items-center gap-2 text-sm text-slate-700">
@@ -363,9 +428,9 @@ export function BufferPanel() {
               onChange={(e) => setSchedule((s) => ({ ...s, source: e.target.value as Schedule["source"] }))}
               className="mt-1 w-full rounded-md border border-slate-200 px-2 py-2 text-sm font-normal normal-case"
             >
-              <option value="both">{L("Borradores y luego galería", "Drafts, then gallery")}</option>
+              <option value="both">{L("Borradores y luego galería o estudio", "Drafts, then gallery or studio")}</option>
               <option value="drafts">{L("Solo borradores", "Drafts only")}</option>
-              <option value="gallery">{L("Solo galería", "Gallery only")}</option>
+              <option value="gallery">{L("Galería y estudio creativo", "Gallery and creative studio")}</option>
             </select>
           </label>
           <div>

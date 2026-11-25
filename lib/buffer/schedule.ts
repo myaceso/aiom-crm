@@ -23,6 +23,21 @@ export type AssetRef = {
   createdAt: string;
 };
 
+/** Creative-studio gallery items Buffer can publish. Only public https URLs are kept. */
+export function studioGalleryAssets(
+  items: { id: string; url: string; kind: "image" | "video"; name: string; createdAt: string }[]
+): AssetRef[] {
+  return items
+    .filter((item) => item.url.startsWith("https://"))
+    .map((item) => ({
+      id: item.id.startsWith("creative:") ? item.id : `creative:${item.id}`,
+      url: item.url,
+      kind: item.kind,
+      name: item.name,
+      createdAt: item.createdAt,
+    }));
+}
+
 export type PickedContent = {
   kind: "draft" | "asset";
   refId: string;

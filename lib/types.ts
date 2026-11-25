@@ -1,5 +1,16 @@
 export type Lang = "en" | "es";
 
+/** Ads attribution captured from the public landing query string. */
+export type LeadAttribution = {
+  page: string;
+  service?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  utmContent?: string;
+  utmTerm?: string;
+};
+
 export type Contact = {
   id: string;
   firstName: string;
@@ -13,6 +24,7 @@ export type Contact = {
   notes: Note[];
   timeline: TimelineEvent[];
   createdAt: string;
+  attribution?: LeadAttribution;
 };
 
 export type Note = {
@@ -297,6 +309,14 @@ export type BufferIntegration = {
   verifiedAt: string;
 };
 
+export type CreativeIntegration = {
+  connected: boolean;
+  /** OpenAI key for image generation. Env OPENAI_API_KEY wins when set. */
+  openaiApiKey: string;
+  /** fal.ai key for video generation. Env FAL_KEY wins when set. */
+  falKey: string;
+};
+
 export type MessagingSend = {
   id: string;
   channel: "whatsapp" | "telegram";
@@ -314,6 +334,7 @@ export type Integrations = {
   whatsapp: WhatsAppIntegration;
   telegram: TelegramIntegration;
   buffer: BufferIntegration;
+  creative: CreativeIntegration;
 };
 
 export type PermissionKey =

@@ -1,5 +1,7 @@
 import { generateAiReply, isAiConfigured } from "../ai";
+import { listAssets } from "../creative/records";
 import { getCrmState, saveCrmState } from "../crmDb";
+import { normalizeIntegrations } from "../seed";
 import type { BufferChannelInfo, CrmState } from "../types";
 import { BufferApiError, appBufferClient, type BufferAccountSnapshot, type BufferClient } from "./client";
 import { deliverToChannels, runDailyPass, type CaptionResult } from "./daily";
@@ -11,7 +13,6 @@ import {
   integrationFromAuth,
   isBufferId,
   isHttpsUrl,
-  normalizeIntegrations,
   normalizeTimes,
   safeTimeZone,
   type BufferAuthRecord,
@@ -21,6 +22,7 @@ import {
 } from "./model";
 import { oauthConfigured, refreshAccessToken } from "./oauth";
 import { getBufferConfig, listDailyUserIds, saveBufferConfig, withBufferLock } from "./persist";
+import { studioGalleryAssets } from "./schedule";
 
 export function bufferEnvKey(): string {
   return process.env.BUFFER_API_KEY?.trim() || "";
@@ -373,6 +375,7 @@ export async function runDueBuffer(deadline: number) {
         const cfg = await getBufferConfig(userId);
         if (!cfg.schedule.enabled) return { due: 0, sent: 0, failed: 0 };
         const crm = await getCrmState(userId);
+        const studio = await listAssets(userId).catch(() => []);
         const result = await runDailyPass({
           now: new Date(),
           config: cfg,
@@ -383,17 +386,27 @@ export async function runDueBuffer(deadline: number) {
             mediaIds: p.mediaIds || [],
             createdAt: p.createdAt,
           })),
-          assets: (crm?.mediaAssets || []).map((a) => ({
-            id: a.id,
-            url: a.url,
-            kind: a.kind,
-            name: a.name,
-            createdAt: a.createdAt,
-          })),
+          assets: [
+            ...(crm?.mediaAssets || []).map((a) => ({
+              id: a.id,
+              url: a.url,
+              kind: a.kind,
+              name: a.name,
+              createdAt: a.createdAt,
+            })),
+            ...studioGalleryAssets(studio),
+          ],
           resolveToken: (c) => resolveBufferToken(c, bufferFromCrm(crm).apiKey),
           clientFor,
           caption: productionCaption,
         });
+        if (studio.length > 0 && studioGalleryAssets(studio).length === 0) {
+          const waiting = result.config.logs.find((log) => log.error === BUFFER_MSG.emptyContent);
+          if (waiting) {
+            waiting.error =
+              "Hay creaciones del estudio, pero sin URL pública. Buffer solo publica archivos https (conecta Blob) o adjúntalas desde Marketing.";
+          }
+        }
         await saveBufferConfig(userId, result.config);
         return result;
       });
