@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Download, Film, ImageIcon, Loader2, Sparkles, Trash2 } from "lucide-react";
 import { parseHashtags } from "@/lib/creative/copy";
+import { SendToBufferDialog, type BufferSendAsset } from "@/components/marketing/SendToBufferDialog";
 import type { CreativeAsset, CreativeConfig, CreativeKind } from "@/lib/creative/types";
 import { IMAGE_ASPECTS, VIDEO_ASPECTS } from "@/lib/creative/types";
 import type { Lang } from "@/lib/types";
@@ -135,6 +136,7 @@ export function CreativeStudio({
   const [hashtags, setHashtags] = useState("");
   const [copyWarning, setCopyWarning] = useState("");
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [bufferAsset, setBufferAsset] = useState<BufferSendAsset | null>(null);
   const [editNote, setEditNote] = useState("");
   const controller = useRef<AbortController | null>(null);
   const editRef = useRef<HTMLTextAreaElement | null>(null);
@@ -675,8 +677,11 @@ export function CreativeStudio({
                 <Download className="h-4 w-4" />
                 {L("Descargar", "Download")}
               </button>
-              <button type="button" disabled={disabled || busy} className="brand-bg rounded-md px-3 py-2 text-sm font-semibold text-white disabled:opacity-40" onClick={() => void attachItem(flyerFile ? { file: flyerFile, asset: { ...result, caption, hashtags: hashtagList } } : { asset: result })}>
+              <button type="button" disabled={disabled || busy} className="brand-bg rounded-md px-3 py-2 text-sm font-semibold text-white disabled:opacity-40" onClick={() => void attachItem(flyerFile ? { file: flyerFile, asset: { ...result, caption, hashtags: hashtagList } } : { asset: { ...result, caption, hashtags: hashtagList } })}>
                 {L("Usar en la publicación", "Use in post")}
+              </button>
+              <button type="button" className="rounded-md border-2 border-slate-900 bg-white px-3 py-2 text-sm font-semibold text-slate-900" onClick={() => setBufferAsset({ ...result, caption, hashtags: hashtagList })}>
+                {L("Enviar a Buffer", "Send to Buffer")}
               </button>
             </div>
           )}
@@ -771,6 +776,9 @@ export function CreativeStudio({
             <button type="button" disabled={disabled || busy} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 disabled:opacity-40" onClick={() => void regenCopy()}>
               {L("Regenerar texto", "Regenerate text")}
             </button>
+            <button type="button" className="rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white" onClick={() => setBufferAsset({ ...result, caption, hashtags: hashtagList })}>
+              {L("Enviar a Buffer", "Send to Buffer")}
+            </button>
           </div>
           {result.kind === "video" && (
             <p className="text-xs text-slate-500">{L("Editar con IA está disponible para imágenes. En video usa Regenerar.", "AI edit is available for images. For video, use Regenerate.")}</p>
@@ -817,6 +825,9 @@ export function CreativeStudio({
                 </div>
                 <div className="space-y-2 p-2">
                   <p className="line-clamp-2 text-[11px] text-slate-600">{item.prompt || L("Sin prompt", "No prompt")}</p>
+                  <button type="button" className="w-full rounded-md bg-slate-900 px-2 py-1.5 text-xs font-semibold text-white" onClick={() => setBufferAsset(item)}>
+                    {L("Enviar a Buffer", "Send to Buffer")}
+                  </button>
                   <div className="flex flex-wrap gap-1">
                     <button type="button" disabled={disabled || busy || !item.prompt?.trim()} className="rounded bg-[var(--brand)] px-1.5 py-1 text-[10px] font-semibold text-white disabled:opacity-40" onClick={() => void generate(true, item)}>
                       {L("Regenerar", "Regenerate")}
@@ -845,6 +856,7 @@ export function CreativeStudio({
           </ul>
         )}
       </div>
+      <SendToBufferDialog asset={bufferAsset} language={language} onClose={() => setBufferAsset(null)} />
     </section>
   );
 }

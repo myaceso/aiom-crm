@@ -31,6 +31,8 @@ export type BufferDailySchedule = {
   aiBrief: string;
   usedDraftIds: string[];
   usedAssetIds: string[];
+  /** Creative-studio asset ids the owner asked to send on the next daily slots. */
+  pinnedAssetIds: string[];
   /** slot HH:mm → local date YYYY-MM-DD already delivered */
   fired: Record<string, string>;
   /** slot HH:mm → local date we already logged a waiting error */
@@ -42,7 +44,7 @@ export type BufferDailySchedule = {
 export type BufferSendLog = {
   id: string;
   at: string;
-  source: "manual" | "daily";
+  source: "manual" | "daily" | "queued";
   channelId: string;
   channelName: string;
   service: string;
@@ -93,6 +95,7 @@ export function blankSchedule(): BufferDailySchedule {
     aiBrief: "",
     usedDraftIds: [],
     usedAssetIds: [],
+    pinnedAssetIds: [],
     fired: {},
     noted: {},
     attempts: {},

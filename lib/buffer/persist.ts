@@ -18,6 +18,7 @@ function coerceSchedule(raw: Partial<BufferDailySchedule> | undefined): BufferDa
     channelIds: Array.isArray(raw.channelIds) ? raw.channelIds : [],
     usedDraftIds: Array.isArray(raw.usedDraftIds) ? raw.usedDraftIds : [],
     usedAssetIds: Array.isArray(raw.usedAssetIds) ? raw.usedAssetIds : [],
+    pinnedAssetIds: Array.isArray(raw.pinnedAssetIds) ? raw.pinnedAssetIds.map(String) : [],
     fired: raw.fired && typeof raw.fired === "object" ? raw.fired : {},
     noted: raw.noted && typeof raw.noted === "object" ? raw.noted : {},
     attempts: raw.attempts && typeof raw.attempts === "object" ? raw.attempts : {},

@@ -42,6 +42,7 @@ import { postText } from "@/lib/creative/copy";
 import type { CreativeAsset } from "@/lib/creative/types";
 import { normalizeProfileUrl } from "@/lib/social";
 import { BufferPanel } from "@/components/marketing/BufferPanel";
+import { SendToBufferDialog, type BufferSendAsset } from "@/components/marketing/SendToBufferDialog";
 
 const NETWORK_ICONS: Record<SocialNetworkId, typeof Facebook> = {
   facebook: Facebook,
@@ -94,6 +95,8 @@ export default function MarketingPage() {
   const [filter, setFilter] = useState<Filter>("all");
   const [rowBusy, setRowBusy] = useState<string | null>(null);
   const [showLocal, setShowLocal] = useState(false);
+  const [composerBuffer, setComposerBuffer] = useState<CreativeAsset | null>(null);
+  const [bufferDialog, setBufferDialog] = useState<BufferSendAsset | null>(null);
 
   useMediaPreviewHydration();
 
@@ -142,6 +145,7 @@ export default function MarketingPage() {
   }
 
   async function useGenerated(item: { file?: File; asset?: CreativeAsset }) {
+    if (item.asset) setComposerBuffer(item.asset);
     const caption = item.asset ? postText(item.asset.caption, item.asset.hashtags) : "";
     if (caption) setBody(caption);
     const attached = (id: string) => {
@@ -386,6 +390,14 @@ export default function MarketingPage() {
               "Publish to Facebook & Instagram, and schedule Buffer every day"
             )}
           </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <a href="#estudio-creativo" className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
+              {L("Estudio creativo", "Creative studio")}
+            </a>
+            <a href="#buffer" className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white">
+              {L("Enviar con Buffer", "Send with Buffer")}
+            </a>
+          </div>
         </div>
         <Link
           href="/dashboard/integrations"
@@ -451,6 +463,8 @@ export default function MarketingPage() {
 
       <CreativeStudio language={language} disabled={busy} onUseInPost={useGenerated} />
 
+      <BufferPanel />
+
       <section className="grid gap-4 lg:grid-cols-2">
         <form
           id="post-composer"
@@ -461,6 +475,15 @@ export default function MarketingPage() {
           className="w-full min-w-0 space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
         >
           <h2 className="text-sm font-semibold text-slate-700">{t(language, "postComposer")}</h2>
+          {composerBuffer && (
+            <button
+              type="button"
+              className="w-full rounded-md border-2 border-slate-900 bg-slate-900 px-3 py-2 text-sm font-semibold text-white"
+              onClick={() => setBufferDialog(composerBuffer)}
+            >
+              {L("Enviar a Buffer", "Send to Buffer")}
+            </button>
+          )}
 
           <div>
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -827,7 +850,7 @@ export default function MarketingPage() {
         </div>
       </section>
 
-      <BufferPanel />
+      <SendToBufferDialog asset={bufferDialog} language={language} onClose={() => setBufferDialog(null)} />
     </div>
   );
 }

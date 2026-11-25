@@ -179,6 +179,7 @@ export async function runDailyPass(deps: DailyDeps): Promise<{ config: BufferCon
       assets: deps.assets,
       usedDraftIds: schedule.usedDraftIds,
       usedAssetIds: schedule.usedAssetIds,
+      pinnedIds: schedule.pinnedAssetIds || [],
     });
     if (!item) {
       noteOnce(cfg, slot, date, waitingMessage("content"));
@@ -223,6 +224,8 @@ export async function runDailyPass(deps: DailyDeps): Promise<{ config: BufferCon
       delete schedule.attempts[attemptKey];
       if (item.kind === "draft") schedule.usedDraftIds.push(item.refId);
       else schedule.usedAssetIds.push(item.refId);
+      const bare = item.refId.replace(/^creative:/, "");
+      schedule.pinnedAssetIds = (schedule.pinnedAssetIds || []).filter((id) => id !== bare && id !== item.refId);
       sent++;
     } else {
       const n = (schedule.attempts[attemptKey] || 0) + 1;

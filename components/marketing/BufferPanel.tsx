@@ -23,7 +23,7 @@ type Status = {
 type Log = {
   id: string;
   at: string;
-  source: "manual" | "daily";
+  source: "manual" | "daily" | "queued";
   channelName: string;
   service: string;
   text: string;
@@ -158,6 +158,9 @@ export function BufferPanel() {
 
   useEffect(() => {
     void load();
+    const onUpdate = () => void load();
+    window.addEventListener("enone-buffer-updated", onUpdate);
+    return () => window.removeEventListener("enone-buffer-updated", onUpdate);
   }, [load]);
 
   useEffect(() => {
@@ -278,7 +281,7 @@ export function BufferPanel() {
   const list = status?.channels || [];
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <section id="buffer" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold text-slate-800">{L("Buffer · cada día", "Buffer · every day")}</h2>
@@ -553,7 +556,7 @@ export function BufferPanel() {
                 </span>
                 <span className="text-slate-500">{log.at ? format(new Date(log.at), "d MMM HH:mm") : ""}</span>
                 <span className="text-slate-600">
-                  {log.source === "daily" ? L("automático", "automatic") : L("manual", "manual")}
+                  {log.source === "daily" ? L("automático", "automatic") : log.source === "queued" ? L("programación diaria", "daily queue") : L("manual", "manual")}
                   {log.channelName ? ` · ${serviceLabel(log.service)} ${log.channelName}` : ""}
                 </span>
               </div>

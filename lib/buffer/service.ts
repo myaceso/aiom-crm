@@ -13,6 +13,7 @@ import {
   integrationFromAuth,
   isBufferId,
   isHttpsUrl,
+  newBufferId,
   normalizeTimes,
   safeTimeZone,
   type BufferAuthRecord,
@@ -22,10 +23,20 @@ import {
 } from "./model";
 import { oauthConfigured, refreshAccessToken } from "./oauth";
 import { getBufferConfig, listDailyUserIds, saveBufferConfig, withBufferLock } from "./persist";
-import { studioGalleryAssets } from "./schedule";
+import { pinDailyAsset, studioGalleryAssets } from "./schedule";
 
 export function bufferEnvKey(): string {
   return process.env.BUFFER_API_KEY?.trim() || "";
+}
+
+/** Public https URL Buffer can fetch. Local studio files are simulated only when BUFFER_MOCK=1. */
+export function bufferMediaUrl(url: string, id = "media"): string | null {
+  const raw = String(url || "").trim();
+  if (isHttpsUrl(raw)) return raw;
+  if (process.env.BUFFER_MOCK === "1" && raw.startsWith("/api/marketing/creative/file/")) {
+    return `https://mock.buffer.local/creative/${id}`;
+  }
+  return null;
 }
 
 export function bufferErrorBody(e: unknown): { status: number; error: string } {
@@ -240,6 +251,8 @@ export async function sendBufferPost(
     mode?: "queue" | "custom" | "now";
     dueAt?: string | null;
     aiAssisted?: boolean;
+    addToDaily?: boolean;
+    creativeId?: string;
   }
 ) {
   const ran = await withBufferLock(userId, async () => {
@@ -256,15 +269,23 @@ export async function sendBufferPost(
     }
     const rawMedia = Array.isArray(input.media) ? input.media : [];
     const media: BufferMedia[] = rawMedia
-      .filter((m) => m && isHttpsUrl(String(m.url || "")))
       .slice(0, 10)
-      .map((m) => ({
-        url: String(m.url),
-        kind: m.kind === "video" ? "video" : "image",
-        name: String(m.name || "media").slice(0, 160),
-      }));
+      .flatMap((m) => {
+        if (!m) return [];
+        const url = bufferMediaUrl(String(m.url || ""), String(m.name || "media"));
+        if (!url) return [];
+        return [{
+          url,
+          kind: m.kind === "video" ? "video" : "image" as const,
+          name: String(m.name || "media").slice(0, 160),
+        }];
+      });
     if (rawMedia.length !== media.length) {
-      throw new BufferApiError("Hay medios sin URL pública (https). Vuelve a adjuntarlos desde la galería.", 400, "mutation");
+      throw new BufferApiError(
+        "Esta creación no tiene una URL pública https. Buffer no puede descargarla. Conecta el almacenamiento Blob o genera de nuevo cuando Blob esté activo.",
+        400,
+        "mutation"
+      );
     }
     const text = String(input.text || "").trim();
     if (!text && media.length === 0) throw new BufferApiError(BUFFER_MSG.noText, 400, "mutation");
@@ -286,9 +307,37 @@ export async function sendBufferPost(
       createPost: clientFor(token).createPost,
     });
     cfg.logs = [...logs.slice().reverse(), ...cfg.logs].slice(0, 200);
+    let pinned = false;
+    if (input.addToDaily && input.creativeId) {
+      const channelsForDaily = requested.filter((id) => channels.some((ch) => ch.id === id));
+      cfg.schedule = pinDailyAsset(cfg.schedule, input.creativeId, channelsForDaily);
+      pinned = true;
+      cfg.logs.unshift({
+        id: newBufferId("bf"),
+        at: new Date().toISOString(),
+        source: "queued",
+        channelId: "",
+        channelName: channelsForDaily.length ? `${channelsForDaily.length} canales` : "",
+        service: "",
+        text: text.slice(0, 500),
+        mediaCount: media.length,
+        mode: "addToQueue",
+        dueAt: null,
+        bufferPostId: null,
+        ok: true,
+        error: null,
+        warning: `Quedó en la programación diaria (${cfg.schedule.times.join(", ")} ${cfg.schedule.timezone}).`,
+      });
+      cfg.logs = cfg.logs.slice(0, 200);
+    }
     await saveBufferConfig(userId, cfg);
     const ok = logs.some((l) => l.ok);
-    return { logs, ok, error: ok ? null : logs.find((l) => l.error)?.error || "No se pudo enviar a Buffer." };
+    return {
+      logs: cfg.logs.slice(0, 20),
+      ok,
+      pinned,
+      error: ok ? null : logs.find((l) => l.error)?.error || "No se pudo enviar a Buffer.",
+    };
   });
   if (!ran) throw new BufferApiError("Buffer está procesando otro envío. Espera un momento y reintenta.", 409, "network");
   return ran;
@@ -375,7 +424,10 @@ export async function runDueBuffer(deadline: number) {
         const cfg = await getBufferConfig(userId);
         if (!cfg.schedule.enabled) return { due: 0, sent: 0, failed: 0 };
         const crm = await getCrmState(userId);
-        const studio = await listAssets(userId).catch(() => []);
+        const studio = (await listAssets(userId).catch(() => [])).map((asset) => ({
+          ...asset,
+          url: bufferMediaUrl(asset.url, asset.id) || asset.url,
+        }));
         const result = await runDailyPass({
           now: new Date(),
           config: cfg,
