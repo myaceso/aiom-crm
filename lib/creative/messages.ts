@@ -25,6 +25,16 @@ export const missingCopyKey: Bilingual = {
   en: "For the viral caption and hashtags, add OPENAI_API_KEY or ANTHROPIC_API_KEY on Vercel (the same keys as the Smart Agent).",
 };
 
+export const missingEditKey: Bilingual = {
+  es: "Para editar una imagen con IA agrega OPENAI_API_KEY en Vercel o la clave de OpenAI en Integraciones. Anthropic no edita imágenes.",
+  en: "To edit an image with AI, add OPENAI_API_KEY on Vercel or the OpenAI key in Integrations. Anthropic cannot edit images.",
+};
+
+export const editVideoUnsupported: Bilingual = {
+  es: "Editar con IA funciona con imágenes. En un video usa Regenerar.",
+  en: "AI edit works on images. For a video, use Regenerate.",
+};
+
 export const copyFailed: Bilingual = {
   es: "No se pudo escribir el texto viral. La imagen o el video sí se guardaron. Puedes regenerar solo el texto.",
   en: "The viral caption could not be written. The image or video was still saved. You can regenerate just the text.",

@@ -6,7 +6,7 @@
  * To swap a vendor, replace the body of the matching function below.
  */
 import { generateMockImage, pollMockVideo, submitMockVideo } from "./mock";
-import { generateOpenAiImage } from "./openai";
+import { editOpenAiImage, generateOpenAiImage } from "./openai";
 import { pollFalVideo, submitFalVideo, uploadFalImage } from "./fal";
 import type { ImageGenInput, VideoGenInput, VideoPoll, VideoSubmit } from "./types";
 
@@ -42,6 +42,18 @@ export async function pollVideo(
 
 export async function uploadReferenceImage(bytes: Buffer, apiKey: string): Promise<string> {
   return uploadFalImage(bytes, apiKey);
+}
+
+export async function editImage(
+  provider: "openai" | "mock",
+  input: { prompt: string; aspectRatio: string; bytes?: Buffer; mime?: string; imageUrl?: string },
+  apiKey: string
+): Promise<{ bytes: Buffer; mime: string; remoteUrl?: string }> {
+  if (provider === "mock") {
+    const { renderMockImage } = await import("../mockImage");
+    return { bytes: renderMockImage(input.prompt, input.aspectRatio), mime: "image/png" };
+  }
+  return editOpenAiImage({ ...input, apiKey });
 }
 
 export { ProviderError } from "./types";
