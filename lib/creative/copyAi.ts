@@ -22,16 +22,18 @@ export async function generateCreativeCopy(input: {
   style: string;
   lang: "es" | "en";
   mock: boolean;
+  openaiKey?: string;
 }): Promise<CreativeCopy> {
   if (input.mock) {
     return { ...mockViralCopy(input.prompt, input.kind, input.lang), warning: null };
   }
-  if (!isAiConfigured()) return { caption: "", hashtags: [], warning: missingCopyKey };
+  if (!isAiConfigured() && !input.openaiKey?.trim()) return { caption: "", hashtags: [], warning: missingCopyKey };
   const language = input.lang === "en" ? "English" : "español";
   try {
     const { content } = await generateAiText({
       system: SYSTEM,
       temperature: 0.85,
+      openaiKey: input.openaiKey,
       user: `Idioma: ${language}.\nTipo: ${input.kind === "video" ? "video corto" : "imagen"}.\nEstilo visual: ${input.style || "sin estilo extra"}.\nIdea del usuario: ${input.prompt}`,
     });
     const parsed = parseModelCopy(content);

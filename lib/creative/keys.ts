@@ -25,7 +25,7 @@ export async function resolveCreativeKeys(userId: string): Promise<CreativeKeys>
   const fal = clean(process.env.FAL_KEY) || clean(saved?.falKey);
   const imageReady = mock || !!openai;
   const videoReady = mock || !!fal;
-  const copyReady = mock || isAiConfigured();
+  const copyReady = mock || isAiConfigured() || !!openai;
   return {
     mock,
     openai,

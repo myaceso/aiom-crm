@@ -6,6 +6,7 @@ import {
   configOf,
   deleteGalleryItem,
   editCreativeImage,
+  assetFor,
   galleryFor,
   parseGenerateBody,
   readGeneration,
@@ -34,6 +35,12 @@ export async function GET(req: Request) {
   if (auth.error) return auth.error;
   const keys = await resolveCreativeKeys(auth.user.id);
   const url = new URL(req.url);
+  const assetId = url.searchParams.get("id");
+  if (assetId && !url.searchParams.get("job")) {
+    const asset = await assetFor(auth.user.id, assetId);
+    if (!asset) return fail(404, "not_found", "No encontramos esa creación.", "We could not find that creation.");
+    return NextResponse.json({ asset, config: configOf(keys) });
+  }
   const job = url.searchParams.get("job");
   if (job) {
     try {

@@ -19,6 +19,25 @@ export function postText(caption?: string, hashtags?: string[]): string {
   return [cap, tags].filter(Boolean).join("\n\n").slice(0, 2200);
 }
 
+/** Read caption + hashtags from a stored asset, including older field names. */
+export function normalizeStoredCopy(raw: {
+  caption?: unknown;
+  viralCaption?: unknown;
+  copy?: unknown;
+  text?: unknown;
+  hashtags?: unknown;
+  hashTags?: unknown;
+  tags?: unknown;
+} | null | undefined): { caption: string; hashtags: string[] } {
+  const source = raw || {};
+  const caption = [source.caption, source.viralCaption, source.copy, source.text]
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .find(Boolean) || "";
+  const tagSource = source.hashtags ?? source.hashTags ?? source.tags;
+  const joined = Array.isArray(tagSource) ? tagSource.map((tag) => String(tag)).join(" ") : String(tagSource || "");
+  return { caption: caption.slice(0, 1800), hashtags: parseHashtags(joined) };
+}
+
 export function parseModelCopy(raw: string): { caption: string; hashtags: string[] } | null {
   const trimmed = raw.trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
   const start = trimmed.indexOf("{");

@@ -21,8 +21,8 @@ export const invalidKeyImage: Bilingual = {
 };
 
 export const missingCopyKey: Bilingual = {
-  es: "Para el texto viral y los hashtags agrega OPENAI_API_KEY o ANTHROPIC_API_KEY en Vercel (las mismas claves del Agente inteligente).",
-  en: "For the viral caption and hashtags, add OPENAI_API_KEY or ANTHROPIC_API_KEY on Vercel (the same keys as the Smart Agent).",
+  es: "No hay clave de IA para el texto viral. En Integraciones → Estudio creativo pega la clave de OpenAI, o define OPENAI_API_KEY o ANTHROPIC_API_KEY en Vercel.",
+  en: "There is no AI key for the viral caption. In Integrations → Creative studio paste the OpenAI key, or set OPENAI_API_KEY or ANTHROPIC_API_KEY on Vercel.",
 };
 
 export const missingEditKey: Bilingual = {

@@ -3,7 +3,7 @@ import { editVideoUnsupported, invalidKeyImage, invalidKeyVideo, missingCopyKey,
 import { downloadRemote, isPublicHttps } from "./remote";
 import { editImage, generateImage, pollVideo, ProviderError, submitVideo, uploadReferenceImage } from "./providers";
 import { generateCreativeCopy, type CreativeCopy } from "./copyAi";
-import { parseHashtags } from "./copy";
+import { normalizeStoredCopy, parseHashtags } from "./copy";
 import { buildCreativePrompt, normalizeStyle } from "./prompt";
 import {
   clearPending,
@@ -94,8 +94,7 @@ function toPublic(asset: StoredCreativeAsset): CreativeAsset {
     size: asset.size,
     provider: asset.provider,
     createdAt: asset.createdAt,
-    caption: asset.caption || "",
-    hashtags: Array.isArray(asset.hashtags) ? asset.hashtags : [],
+    ...normalizeStoredCopy(asset),
     groupId: asset.groupId || asset.id,
   };
 }
@@ -177,6 +176,12 @@ async function bytesFromResult(result: { bytes?: Buffer; url?: string; mime: str
   return { bytes: remote.bytes, mime: kind === "video" && mime === "video/webm" ? mime : kind === "video" ? "video/mp4" : mime };
 }
 
+export async function assetFor(userId: string, id: string): Promise<CreativeAsset | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const asset = await getAsset(userId, id);
+  return asset ? toPublic(asset) : null;
+}
+
 export async function galleryFor(userId: string): Promise<CreativeAsset[]> {
   await sweepPending(userId);
   const assets = await listAssets(userId);
@@ -208,6 +213,7 @@ async function writeCopy(input: Parsed, keys: Keys): Promise<CreativeCopy> {
     style: input.style,
     lang: input.lang,
     mock: keys.mock,
+    openaiKey: keys.openai,
   });
 }
 
@@ -397,6 +403,7 @@ export async function editCreativeImage(
       style: current.style,
       lang,
       mock: keys.mock,
+      openaiKey: keys.openai,
     });
     const asset = await materialize(
       userId,
@@ -406,8 +413,8 @@ export async function editCreativeImage(
         style: current.style,
         aspectRatio: current.aspectRatio,
         provider,
-        caption: copy.caption,
-        hashtags: copy.hashtags,
+        caption: copy.caption || current.caption || "",
+        hashtags: copy.hashtags.length ? copy.hashtags : current.hashtags || [],
         groupId: current.groupId || current.id,
       },
       file.bytes,
@@ -434,6 +441,7 @@ export async function refreshCreativeCopy(userId: string, id: string, keys: Keys
     style: current.style,
     lang,
     mock: keys.mock,
+    openaiKey: keys.openai,
   });
   if (!copy.caption && copy.warning) {
     const missing = copy.warning.es === missingCopyKey.es;
