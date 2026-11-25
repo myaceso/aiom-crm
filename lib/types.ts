@@ -1,5 +1,16 @@
 export type Lang = "en" | "es";
 
+/** Ads attribution captured from the public landing query string. */
+export type LeadAttribution = {
+  page: string;
+  service?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  utmContent?: string;
+  utmTerm?: string;
+};
+
 export type Contact = {
   id: string;
   firstName: string;
@@ -13,6 +24,7 @@ export type Contact = {
   notes: Note[];
   timeline: TimelineEvent[];
   createdAt: string;
+  attribution?: LeadAttribution;
 };
 
 export type Note = {

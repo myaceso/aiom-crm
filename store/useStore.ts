@@ -60,6 +60,8 @@ type Store = {
   users: SafeUser[];
   session: Session | null;
   crmReady: boolean;
+  /** Landing contact ids present when this browser last loaded the CRM. */
+  crmLoadedLandingIds: string[] | null;
   loadCrm: () => Promise<void>;
   refreshAuth: () => Promise<void>;
   fetchUsers: () => Promise<void>;
@@ -199,13 +201,14 @@ export const useStore = create<Store>()(
       users: [],
       session: null,
       crmReady: false,
+      crmLoadedLandingIds: null,
       loadCrm: async () => {
         const session = get().session;
         if (!session) {
           set({ crmReady: false });
           return;
         }
-        set({ crmReady: false });
+        set({ crmReady: false, crmLoadedLandingIds: null });
         try {
           const res = await fetch("/api/crm/state", {
             credentials: "include",
@@ -215,13 +218,18 @@ export const useStore = create<Store>()(
           const data = await res.json();
           if (data.state) {
             const state = data.state as CrmState;
+            const contacts = state.contacts || [];
             set({
               ...state,
+              contacts,
               mediaAssets: (state.mediaAssets || []).map((m) => ({
                 ...m,
                 previewUrl: undefined,
               })),
               crmReady: true,
+              crmLoadedLandingIds: contacts
+                .filter((c) => c.source === "landing")
+                .map((c) => c.id),
             });
           } else {
             set({
@@ -240,6 +248,7 @@ export const useStore = create<Store>()(
               integrations: defaultIntegrations,
               messagingSends: [],
               crmReady: true,
+              crmLoadedLandingIds: [],
             });
             get().ensureSeed();
           }
@@ -359,7 +368,7 @@ export const useStore = create<Store>()(
         } catch {
           /* ignore */
         }
-        set({ session: null, crmReady: false, contacts: [], opportunities: [], conversations: [], appointments: [], activity: [], socialConnections: [], socialPosts: [], mediaAssets: [], smsCampaigns: [], emailCampaigns: [], emailTemplates: [], integrations: defaultIntegrations, messagingSends: [] });
+        set({ session: null, crmReady: false, crmLoadedLandingIds: null, contacts: [], opportunities: [], conversations: [], appointments: [], activity: [], socialConnections: [], socialPosts: [], mediaAssets: [], smsCampaigns: [], emailCampaigns: [], emailTemplates: [], integrations: defaultIntegrations, messagingSends: [] });
       },
       currentUser: () => {
         const s = get();
@@ -970,6 +979,9 @@ if (typeof window !== "undefined") {
         smsCampaigns: current.smsCampaigns, emailCampaigns: current.emailCampaigns,
         emailTemplates: current.emailTemplates, integrations: current.integrations,
         messagingSends: current.messagingSends,
+        ...(Array.isArray(current.crmLoadedLandingIds)
+          ? { loadedLandingIds: current.crmLoadedLandingIds }
+          : {}),
       };
       try {
         await fetch("/api/crm/state", {
