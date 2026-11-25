@@ -263,6 +263,40 @@ export type TelegramIntegration = {
   defaultChatId: string;
 };
 
+/** A Buffer channel (social profile) returned by the current GraphQL API. */
+export type BufferChannelInfo = {
+  id: string;
+  name: string;
+  displayName: string;
+  service: string;
+  /** Channel type when Buffer sends it (page, profile, group, …). */
+  type: string;
+  avatar: string;
+  descriptor: string;
+  isDisconnected: boolean;
+  isLocked: boolean;
+  isQueuePaused: boolean;
+  organizationId: string;
+};
+
+/**
+ * Per-user Buffer connection stored in CRM state (same pattern as Telegram).
+ * OAuth refresh tokens are NOT stored here — they live in server-only KV.
+ */
+export type BufferIntegration = {
+  connected: boolean;
+  /** Personal API key from Buffer → Settings → API. Empty for OAuth or server env. */
+  apiKey: string;
+  authMethod: "" | "api_key" | "oauth" | "env";
+  accountEmail: string;
+  accountId: string;
+  organizationId: string;
+  organizationName: string;
+  channelIds: string[];
+  channels: BufferChannelInfo[];
+  verifiedAt: string;
+};
+
 export type MessagingSend = {
   id: string;
   channel: "whatsapp" | "telegram";
@@ -279,6 +313,7 @@ export type Integrations = {
   email: EmailIntegration;
   whatsapp: WhatsAppIntegration;
   telegram: TelegramIntegration;
+  buffer: BufferIntegration;
 };
 
 export type PermissionKey =

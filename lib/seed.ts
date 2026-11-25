@@ -12,6 +12,7 @@ import type {
   EmailTemplate,
   Integrations,
 } from "./types";
+import { blankBufferIntegration } from "./buffer/model";
 
 const now = Date.now();
 const daysAgo = (d: number, h = 10) =>
@@ -307,6 +308,7 @@ export const defaultIntegrations: Integrations = {
     botToken: "",
     defaultChatId: "",
   },
+  buffer: blankBufferIntegration(),
 };
 
 export function createSeedSocialPosts(): SocialPost[] {

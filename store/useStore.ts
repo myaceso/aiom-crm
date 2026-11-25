@@ -24,6 +24,7 @@ import type {
   EmailIntegration,
   WhatsAppIntegration,
   TelegramIntegration,
+  BufferIntegration,
   MessagingSend,
   SafeUser,
   Session,
@@ -45,6 +46,7 @@ import {
   defaultSettings,
   defaultIntegrations,
 } from "@/lib/seed";
+import { blankBufferIntegration, normalizeIntegrations } from "@/lib/buffer/model";
 import {
   buildConnectedSocial,
   mergeSocialConnections,
@@ -175,6 +177,8 @@ type Store = {
   disconnectWhatsApp: () => void;
   connectTelegram: (data: Omit<TelegramIntegration, "connected">) => void;
   disconnectTelegram: () => void;
+  connectBuffer: (data: Omit<BufferIntegration, "connected">) => void;
+  disconnectBuffer: () => void;
   messagingSends: MessagingSend[];
   addMessagingSend: (s: Omit<MessagingSend, "id" | "createdAt">) => void;
   toast: Toast;
@@ -217,6 +221,7 @@ export const useStore = create<Store>()(
             const state = data.state as CrmState;
             set({
               ...state,
+              integrations: normalizeIntegrations(state.integrations),
               mediaAssets: (state.mediaAssets || []).map((m) => ({
                 ...m,
                 previewUrl: undefined,
@@ -815,6 +820,20 @@ export const useStore = create<Store>()(
             telegram: { ...defaultIntegrations.telegram },
           },
         })),
+      connectBuffer: (data) =>
+        set((s) => ({
+          integrations: {
+            ...normalizeIntegrations(s.integrations),
+            buffer: { connected: true, ...data },
+          },
+        })),
+      disconnectBuffer: () =>
+        set((s) => ({
+          integrations: {
+            ...normalizeIntegrations(s.integrations),
+            buffer: blankBufferIntegration(),
+          },
+        })),
       messagingSends: [],
       addMessagingSend: (entry) =>
         set((s) => ({
@@ -891,23 +910,16 @@ export const useStore = create<Store>()(
           !s.integrations?.sms ||
           !s.integrations?.email ||
           !s.integrations?.whatsapp ||
-          !s.integrations?.telegram
+          !s.integrations?.telegram ||
+          !s.integrations?.buffer
         ) {
-          patch.integrations = {
+          patch.integrations = normalizeIntegrations({
             sms: { ...defaultIntegrations.sms, ...(s.integrations?.sms || {}) },
-            email: {
-              ...defaultIntegrations.email,
-              ...(s.integrations?.email || {}),
-            },
-            whatsapp: {
-              ...defaultIntegrations.whatsapp,
-              ...(s.integrations?.whatsapp || {}),
-            },
-            telegram: {
-              ...defaultIntegrations.telegram,
-              ...(s.integrations?.telegram || {}),
-            },
-          };
+            email: { ...defaultIntegrations.email, ...(s.integrations?.email || {}) },
+            whatsapp: { ...defaultIntegrations.whatsapp, ...(s.integrations?.whatsapp || {}) },
+            telegram: { ...defaultIntegrations.telegram, ...(s.integrations?.telegram || {}) },
+            buffer: { ...defaultIntegrations.buffer, ...(s.integrations?.buffer || {}) },
+          });
         }
         if (!Array.isArray(s.messagingSends)) {
           patch.messagingSends = [];
