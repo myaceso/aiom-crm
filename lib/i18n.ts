@@ -342,6 +342,13 @@ const dict = {
     aiSuggestFollowUp: "Suggest a follow-up plan for a cold opportunity",
     aiSuggestSocial: "Ideas for a LinkedIn + Instagram post promoting a webinar",
     perm_aiAssistants: "AI Assistants",
+    source: "Source",
+    attribution: "Attribution",
+    sitesLiveKicker: "Published page",
+    sitesLiveBody:
+      "Public page for life insurance, loans, credit, taxes, and savings. Form submissions appear in Contacts with source “landing”.",
+    sitesOpenPage: "Open page",
+    sitesDemoNote: "Demo sample data — read only",
   },
   es: {
     platformLanguage: "Idioma de la plataforma:",
@@ -684,6 +691,13 @@ const dict = {
     aiSuggestFollowUp: "Plan de seguimiento para una oportunidad fría",
     aiSuggestSocial: "Ideas de post LinkedIn + Instagram para un webinar",
     perm_aiAssistants: "Asistentes IA",
+    source: "Origen",
+    attribution: "Atribución",
+    sitesLiveKicker: "Página publicada",
+    sitesLiveBody:
+      "Página pública de seguros de vida, préstamos, crédito, impuestos y ahorro. Los envíos aparecen en Contactos con origen “landing”.",
+    sitesOpenPage: "Abrir página",
+    sitesDemoNote: "Datos de muestra — solo lectura",
   },
 } as const;
 

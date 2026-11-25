@@ -262,9 +262,35 @@ export default function ContactsPage() {
                   <p className="font-medium text-slate-700">{selected.company}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400">Source</p>
+                  <p className="text-xs text-slate-400">{t(language, "source")}</p>
                   <p className="font-medium text-slate-700">{selected.source}</p>
                 </div>
+                {selected.attribution &&
+                  (selected.attribution.utmSource ||
+                    selected.attribution.utmMedium ||
+                    selected.attribution.utmCampaign ||
+                    selected.attribution.utmContent ||
+                    selected.attribution.utmTerm) && (
+                    <div className="sm:col-span-2">
+                      <p className="text-xs text-slate-400">{t(language, "attribution")}</p>
+                      <p className="font-medium text-slate-700">
+                        {[
+                          selected.attribution.utmSource &&
+                            `source: ${selected.attribution.utmSource}`,
+                          selected.attribution.utmMedium &&
+                            `medium: ${selected.attribution.utmMedium}`,
+                          selected.attribution.utmCampaign &&
+                            `campaign: ${selected.attribution.utmCampaign}`,
+                          selected.attribution.utmContent &&
+                            `content: ${selected.attribution.utmContent}`,
+                          selected.attribution.utmTerm &&
+                            `term: ${selected.attribution.utmTerm}`,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    </div>
+                  )}
                 <div>
                   <p className="text-xs text-slate-400">{t(language, "status")}</p>
                   <p className="font-medium capitalize text-slate-700">{selected.status}</p>
