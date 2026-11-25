@@ -46,9 +46,10 @@ function sanitizeMessages(messages: ChatMessage[]): ChatMessage[] {
 
 async function callOpenAI(
   messages: ChatMessage[],
-  options?: { system?: string; temperature?: number }
+  options?: { system?: string; temperature?: number; apiKey?: string }
 ): Promise<string> {
-  const apiKey = process.env.OPENAI_API_KEY!.trim();
+  const apiKey = (options?.apiKey || process.env.OPENAI_API_KEY || "").trim();
+  if (!apiKey) throw new Error("ai_not_configured");
   const base = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(
     /\/$/,
     ""
@@ -156,18 +157,29 @@ export async function generateAiText(input: {
   system: string;
   user: string;
   temperature?: number;
+  /** OpenAI key saved in Integraciones, used only when no server AI key is set. */
+  openaiKey?: string;
 }): Promise<{ content: string; provider: "openai" | "anthropic" }> {
   const provider = resolveAiProvider();
-  if (!provider) {
+  const fallbackKey = input.openaiKey?.trim() || "";
+  if (!provider && !fallbackKey) {
     const err = new Error("ai_not_configured");
     (err as Error & { code: string }).code = "ai_not_configured";
     throw err;
   }
-  const options = { system: input.system, temperature: input.temperature ?? 0.8 };
   const messages: ChatMessage[] = [{ role: "user", content: input.user }];
-  const content =
-    provider === "openai"
-      ? await callOpenAI(messages, options)
-      : await callAnthropic(messages, options);
-  return { content, provider };
+  if (provider === "anthropic" && !process.env.OPENAI_API_KEY?.trim()) {
+    return {
+      content: await callAnthropic(messages, { system: input.system, temperature: input.temperature ?? 0.8 }),
+      provider: "anthropic",
+    };
+  }
+  return {
+    content: await callOpenAI(messages, {
+      system: input.system,
+      temperature: input.temperature ?? 0.8,
+      apiKey: process.env.OPENAI_API_KEY?.trim() ? undefined : fallbackKey,
+    }),
+    provider: "openai",
+  };
 }

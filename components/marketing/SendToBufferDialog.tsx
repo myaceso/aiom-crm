@@ -32,10 +32,12 @@ export function SendToBufferDialog({
   asset,
   language,
   onClose,
+  onUpdated,
 }: {
   asset: BufferSendAsset | null;
   language: Lang;
   onClose: () => void;
+  onUpdated?: (asset: BufferSendAsset & { caption: string; hashtags: string[] }) => void;
 }) {
   const es = language !== "en";
   const L = (a: string, b: string) => (es ? a : b);
@@ -48,6 +50,39 @@ export function SendToBufferDialog({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [copyState, setCopyState] = useState<"idle" | "loading" | "generating" | "ready">("idle");
+  const [copyError, setCopyError] = useState("");
+
+  async function loadCopy(id: string, regenerate: boolean) {
+    setCopyError("");
+    setCopyState(regenerate ? "generating" : "loading");
+    const saved = await fetch(`/api/marketing/creative?id=${encodeURIComponent(id)}`, { credentials: "include", cache: "no-store" });
+    const savedBody = await saved.json().catch(() => ({}));
+    let caption = String(savedBody.asset?.caption || "");
+    let hashtags: string[] = Array.isArray(savedBody.asset?.hashtags) ? savedBody.asset.hashtags : [];
+    const empty = !postText(caption, hashtags).trim();
+    if (regenerate || empty) {
+      setCopyState("generating");
+      const generated = await fetch("/api/marketing/creative", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "copy", id, lang: language === "en" ? "en" : "es" }),
+      });
+      const body = await generated.json().catch(() => ({}));
+      if (!generated.ok || !body.asset) {
+        setCopyState("ready");
+        setCopyError(body.message || (language === "en" ? "Could not write the caption." : "No se pudo escribir el texto."));
+        if (!regenerate && postText(caption, hashtags)) setText(postText(caption, hashtags));
+        return;
+      }
+      caption = String(body.asset.caption || "");
+      hashtags = Array.isArray(body.asset.hashtags) ? body.asset.hashtags : [];
+      onUpdated?.({ ...body.asset, caption, hashtags });
+    }
+    setText(postText(caption, hashtags));
+    setCopyState("ready");
+  }
 
   useEffect(() => {
     if (!asset) return;
@@ -57,7 +92,14 @@ export function SendToBufferDialog({
     setDaily(false);
     setMessage("");
     setError("");
+    setCopyError("");
     let cancel = false;
+    void loadCopy(asset.id, false).catch(() => {
+      if (!cancel) {
+        setCopyState("ready");
+        setCopyError(language === "en" ? "Could not load the caption." : "No se pudo cargar el texto.");
+      }
+    });
     void fetch("/api/buffer/status", { credentials: "include", cache: "no-store" })
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
@@ -75,7 +117,9 @@ export function SendToBufferDialog({
     return () => {
       cancel = true;
     };
-  }, [asset]);
+    // Reload copy only when a different creation is opened.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asset?.id]);
 
   if (!asset) return null;
   const connected = Boolean(status?.connected);
@@ -197,10 +241,30 @@ export function SendToBufferDialog({
                 <p className="text-sm text-amber-800">{L("No hay canales. Actualízalos en Integraciones → Buffer.", "No channels. Refresh them in Integrations → Buffer.")}</p>
               )}
             </div>
-            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              {L("Texto", "Caption")}
-              <textarea className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-normal normal-case text-slate-800" rows={5} maxLength={2200} value={text} onChange={(event) => setText(event.target.value)} />
-            </label>
+            <div>
+              <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{L("Texto y hashtags", "Caption and hashtags")}</p>
+                <button type="button" className="text-xs font-semibold text-[var(--brand)] disabled:opacity-40" disabled={copyState === "generating" || copyState === "loading"} onClick={() => void loadCopy(asset.id, true)}>
+                  {L("Generar/Regenerar texto", "Generate/regenerate text")}
+                </button>
+              </div>
+              {(copyState === "loading" || copyState === "generating") && (
+                <p className="mb-1 flex items-center gap-2 text-sm text-slate-600">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {copyState === "generating" ? L("Escribiendo el texto viral y los hashtags…", "Writing the viral caption and hashtags…") : L("Cargando el texto guardado…", "Loading the saved caption…")}
+                </p>
+              )}
+              {copyError && (
+                <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                  <p>{copyError}</p>
+                  <Link href="/dashboard/integrations#claves-creativas" className="mt-1 inline-block font-semibold underline">
+                    {L("Ir a Integraciones → Estudio creativo", "Go to Integrations → Creative studio")}
+                  </Link>
+                </div>
+              )}
+              <textarea className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-800" rows={6} maxLength={2200} value={text} onChange={(event) => setText(event.target.value)} />
+              <p className="mt-1 text-[11px] text-slate-500">{L("Se envía la caption, una línea en blanco y los hashtags.", "The caption, a blank line, and the hashtags are sent together.")}</p>
+            </div>
             <div className="flex flex-wrap gap-2 text-sm">
               {([
                 ["queue", L("Agregar a la cola", "Add to queue")],

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Download, Film, ImageIcon, Loader2, Sparkles, Trash2 } from "lucide-react";
-import { parseHashtags } from "@/lib/creative/copy";
+import { parseHashtags, postText } from "@/lib/creative/copy";
 import { SendToBufferDialog, type BufferSendAsset } from "@/components/marketing/SendToBufferDialog";
 import type { CreativeAsset, CreativeConfig, CreativeKind } from "@/lib/creative/types";
 import { IMAGE_ASPECTS, VIDEO_ASPECTS } from "@/lib/creative/types";
@@ -766,6 +766,9 @@ export function CreativeStudio({
           <p className="text-xs text-slate-500">
             {L("Cambia el prompt de arriba y pulsa Regenerar, o describe un cambio para Editar con IA. La versión original se queda en la galería.", "Change the prompt above and press Regenerate, or describe a change for AI edit. The original stays in the gallery.")}
           </p>
+          <p className="whitespace-pre-line rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800">
+            {postText(caption, hashtagList) || L("Todavía no hay texto viral ni hashtags.", "There is no viral caption or hashtags yet.")}
+          </p>
           <div className="flex flex-wrap gap-2">
             <button type="button" disabled={disabled || busy || !prompt.trim()} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 disabled:opacity-40" onClick={() => void generate(true)}>
               {result.kind === "image" ? L("Regenerar", "Regenerate") : L("Regenerar video", "Regenerate video")}
@@ -824,7 +827,12 @@ export function CreativeStudio({
                   )}
                 </div>
                 <div className="space-y-2 p-2">
-                  <p className="line-clamp-2 text-[11px] text-slate-600">{item.prompt || L("Sin prompt", "No prompt")}</p>
+                  <p className="line-clamp-2 text-[11px] text-slate-500">{item.prompt || L("Sin prompt", "No prompt")}</p>
+                  {postText(item.caption, item.hashtags) ? (
+                    <p className="line-clamp-4 whitespace-pre-line text-[11px] text-slate-800">{postText(item.caption, item.hashtags)}</p>
+                  ) : (
+                    <p className="text-[10px] font-semibold text-amber-800">{L("Sin texto viral. Enviar a Buffer lo escribe si hay clave de IA.", "No viral caption. Send to Buffer writes one when an AI key is set.")}</p>
+                  )}
                   <button type="button" className="w-full rounded-md bg-slate-900 px-2 py-1.5 text-xs font-semibold text-white" onClick={() => setBufferAsset(item)}>
                     {L("Enviar a Buffer", "Send to Buffer")}
                   </button>
@@ -856,7 +864,18 @@ export function CreativeStudio({
           </ul>
         )}
       </div>
-      <SendToBufferDialog asset={bufferAsset} language={language} onClose={() => setBufferAsset(null)} />
+      <SendToBufferDialog
+        asset={bufferAsset}
+        language={language}
+        onClose={() => setBufferAsset(null)}
+        onUpdated={(next) => {
+          setGallery((items) => items.map((item) => (item.id === next.id ? { ...item, caption: next.caption, hashtags: next.hashtags } : item)));
+          setResult((current) => (current?.id === next.id ? { ...current, caption: next.caption, hashtags: next.hashtags } : current));
+          setCaption(next.caption);
+          setHashtags(next.hashtags.join(" "));
+          setBufferAsset((current) => (current?.id === next.id ? { ...current, caption: next.caption, hashtags: next.hashtags } : current));
+        }}
+      />
     </section>
   );
 }
