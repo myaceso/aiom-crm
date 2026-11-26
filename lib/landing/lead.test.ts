@@ -93,6 +93,7 @@ test("accepts a valid lead and stores source landing plus UTM", () => {
   assert.equal(lead.lastName, "López");
   assert.equal(lead.email, "maria@example.com");
   assert.deepEqual(lead.tags, ["landing", "Crédito"]);
+  assert.match(lead.notes[0].body, /Servicios de interés: Crédito/);
   assert.equal(lead.attribution?.page, "finanzas");
   assert.equal(lead.attribution?.service, "credito");
   assert.equal(lead.attribution?.utmSource, "instagram");
@@ -100,6 +101,32 @@ test("accepts a valid lead and stores source landing plus UTM", () => {
   assert.equal(lead.attribution?.utmCampaign, "abril");
   assert.match(lead.notes[0].body, /utm_source=instagram/);
   assert.match(lead.notes[0].body, /Consentimiento para contacto: sí/);
+});
+
+test("stores every selected service as a tag and in the note", () => {
+  const parsed = validateLandingLead(
+    { ...validBody, services: ["seguros-de-vida", "impuestos", "otro"] },
+    ["seguros-de-vida", "prestamos", "credito", "impuestos", "ahorro", "otro"]
+  );
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok || parsed.spam) return;
+  const lead = buildLandingContact(parsed.lead, new Date("2026-04-02T00:00:00.000Z"), "ld_multi", {
+    "seguros-de-vida": "Seguros de vida",
+    impuestos: "Impuestos",
+    otro: "Otro",
+  });
+  assert.deepEqual(lead.tags, ["landing", "Seguros de vida", "Impuestos", "Otro"]);
+  assert.match(lead.notes[0].body, /Servicios de interés: Seguros de vida; Impuestos; Otro/);
+  assert.equal(parsed.lead.services.join(","), "seguros-de-vida,impuestos,otro");
+});
+
+test("rejects a second service when the form allows only one", () => {
+  const parsed = validateLandingLead(
+    { ...validBody, services: ["credito", "impuestos"] },
+    ["credito", "impuestos"],
+    { multiple: false }
+  );
+  assert.equal(parsed.ok, false);
 });
 
 test("rejects missing consent, bad email, unknown service, and long messages", () => {

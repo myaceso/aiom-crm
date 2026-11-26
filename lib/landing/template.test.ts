@@ -60,12 +60,12 @@ test("https links and anchors survive, and sections can move without losing the 
   const moved = moveSection(template.sections, 0, 1);
   assert.equal(moved[0].type, "services");
   assert.equal(moved[1].type, "hero");
-  assert.equal(serviceChoices({ ...template, sections: moved }).length, 5);
+  assert.equal(serviceChoices({ ...template, sections: moved }).some((item) => item.id === "otro"), true);
   const extra = blankSection("text");
   assert.equal(extra.type, "text");
 });
 
-test("a published custom service id is a valid form choice", () => {
+test("old pages without form options inherit the services list and Otro", () => {
   const template = sanitizeLandingTemplate({
     sections: [
       {
@@ -73,7 +73,38 @@ test("a published custom service id is a valid form choice", () => {
         heading: "Servicios",
         items: [{ id: "hipotecas", title: "Orientación hipotecaria", summary: "Sin prometer aprobación." }],
       },
+      { type: "contact", heading: "Escríbenos", intro: "Cuéntanos." },
     ],
   });
-  assert.deepEqual(serviceChoices(template), [{ id: "hipotecas", title: "Orientación hipotecaria" }]);
+  const contact = template.sections.find((section) => section.type === "contact");
+  assert.equal(contact?.type, "contact");
+  if (contact?.type === "contact") {
+    assert.equal(contact.allowMultiple, true);
+    assert.deepEqual(
+      contact.options.map((item) => item.id),
+      ["hipotecas", "otro"]
+    );
+  }
+  assert.deepEqual(
+    serviceChoices(template).map((item) => item.title),
+    ["Orientación hipotecaria", "Otro"]
+  );
+});
+
+test("an explicit single-choice list is kept without adding Otro", () => {
+  const template = sanitizeLandingTemplate({
+    sections: [
+      {
+        type: "contact",
+        heading: "Escríbenos",
+        allowMultiple: false,
+        options: [{ id: "credito", title: "Crédito" }],
+      },
+    ],
+  });
+  const contact = template.sections.find((section) => section.type === "contact");
+  if (contact?.type === "contact") {
+    assert.equal(contact.allowMultiple, false);
+    assert.deepEqual(contact.options, [{ id: "credito", title: "Crédito" }]);
+  }
 });

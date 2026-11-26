@@ -18,7 +18,7 @@ import {
   SECTION_TITLE_CLASS,
   defaultLandingTemplate,
   googleFontsHref,
-  serviceChoices,
+  formServiceOptions,
   type LandingSection,
   type LandingTemplate,
 } from "@/lib/landing/template";
@@ -29,7 +29,7 @@ const ERRORS: Record<string, string> = {
   invalid_name: "Escribe tu nombre completo.",
   invalid_phone: "Escribe un teléfono válido, con código de área.",
   invalid_email: "Escribe un correo electrónico válido.",
-  invalid_service: "Elige el servicio que te interesa.",
+  invalid_service: "Elige al menos un servicio.",
   invalid_message: "El mensaje es demasiado largo.",
   consent_required: "Necesitamos tu permiso para contactarte.",
   too_many: "Enviaste varias solicitudes. Espera unos minutos e inténtalo de nuevo.",
@@ -138,7 +138,9 @@ export default function FinanzasLanding({
 }) {
   const tel = phoneHref({ phoneE164: template.phoneE164 });
   const wa = whatsappHref({ whatsappE164: template.whatsappE164 });
-  const choices = serviceChoices(template);
+  const formOptions = formServiceOptions(template);
+  const choices = formOptions.options;
+  const allowMultiple = formOptions.allowMultiple;
   const theme = template.theme;
   const headingStyle = {
     fontFamily: `"${theme.headingFont}", Inter, sans-serif`,
@@ -147,7 +149,7 @@ export default function FinanzasLanding({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [service, setService] = useState("");
+  const [services, setServices] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [consent, setConsent] = useState(false);
   const [honeypot, setHoneypot] = useState("");
@@ -182,7 +184,7 @@ export default function FinanzasLanding({
       setError(ERRORS.invalid_email);
       return;
     }
-    if (!service) {
+    if (!services.length) {
       setError(ERRORS.invalid_service);
       return;
     }
@@ -203,7 +205,8 @@ export default function FinanzasLanding({
           name,
           phone,
           email,
-          service,
+          service: services[0],
+          services,
           message,
           consent,
           company_website: honeypot,
@@ -415,15 +418,42 @@ export default function FinanzasLanding({
                     <input required type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className={fieldClass} placeholder="tu@correo.com" />
                   </label>
                 </div>
-                <label className="block text-sm font-semibold" style={{ color: theme.primary }}>
-                  Servicio de interés
-                  <select required value={service} onChange={(e) => setService(e.target.value)} className={fieldClass}>
-                    <option value="">Elige un servicio</option>
-                    {choices.map((item) => (
-                      <option key={item.id} value={item.id}>{item.title}</option>
-                    ))}
-                  </select>
-                </label>
+                <fieldset className="border-0 p-0" {...mark("options")}>
+                  <legend className="text-sm font-semibold" style={{ color: theme.primary }}>
+                    {allowMultiple ? "Servicios de interés" : "Servicio de interés"}
+                  </legend>
+                  <div className="mt-2 flex flex-wrap gap-2" role={allowMultiple ? "group" : "radiogroup"} aria-label="Servicios">
+                    {choices.map((item) => {
+                      const selected = services.includes(item.id);
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() =>
+                            setServices((current) => {
+                              if (!allowMultiple) return current[0] === item.id ? [] : [item.id];
+                              return current.includes(item.id)
+                                ? current.filter((id) => id !== item.id)
+                                : [...current, item.id];
+                            })
+                          }
+                          className="min-h-11 rounded-full border px-4 text-sm font-semibold"
+                          style={
+                            selected
+                              ? { background: theme.accent, borderColor: theme.accent, color: theme.primary }
+                              : { background: "#fff", borderColor: "#e2e8f0", color: "#334155" }
+                          }
+                        >
+                          {item.title}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">
+                    {allowMultiple ? "Puedes marcar más de uno." : "Elige uno."}
+                  </p>
+                </fieldset>
                 <label className="block text-sm font-semibold" style={{ color: theme.primary }}>
                   Mensaje
                   <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={4} maxLength={1000} className={fieldClass} placeholder="Cuéntanos, en pocas líneas, qué estás buscando." />

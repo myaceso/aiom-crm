@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import FinanzasLanding from "@/components/landing/FinanzasLanding";
-import { defaultLandingTemplate } from "@/lib/landing/template";
+import { defaultLandingTemplate, sanitizeLandingTemplate } from "@/lib/landing/template";
 import { getPublishedLanding } from "@/lib/landing/templateStore";
 
 export const dynamic = "force-dynamic";
 
 async function loadTemplate() {
   try {
-    return (await getPublishedLanding()) ?? defaultLandingTemplate();
+    const published = await getPublishedLanding();
+    return published ? sanitizeLandingTemplate(published) : defaultLandingTemplate();
   } catch {
     return defaultLandingTemplate();
   }

@@ -9,6 +9,7 @@ import {
   blankSection,
   defaultLandingTemplate,
   moveSection,
+  sanitizeLandingTemplate,
   type LandingSection,
   type LandingSectionType,
   type LandingTemplate,
@@ -139,7 +140,7 @@ export default function LandingEditor() {
         return;
       }
       const next = (data.draft || data.published || data.defaults) as LandingTemplate;
-      setTemplate(next);
+      setTemplate(sanitizeLandingTemplate(next));
     })();
   }, []);
 
@@ -344,7 +345,15 @@ export default function LandingEditor() {
           {section && (
             <section ref={sectionRef} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
               <h2 className="text-sm font-semibold text-slate-800">Editar {TYPE_LABEL[section.type]}</h2>
-              <SectionFields section={section} onChange={(next) => patchSection(selected, next)} />
+              <SectionFields
+                section={section}
+                serviceItems={
+                  template.sections.find((item) => item.type === "services")?.type === "services"
+                    ? template.sections.find((item) => item.type === "services")
+                    : undefined
+                }
+                onChange={(next) => patchSection(selected, next)}
+              />
               {section.type === "contact" && (
                 <p className="text-xs leading-5 text-slate-500">El formulario no se puede quitar. Nombre, teléfono, correo, servicio, mensaje, consentimiento y el campo oculto contra spam siguen igual, y cada envío crea un lead.</p>
               )}
@@ -365,7 +374,15 @@ export default function LandingEditor() {
   );
 }
 
-function SectionFields({ section, onChange }: { section: LandingSection; onChange: (section: LandingSection) => void }) {
+function SectionFields({
+  section,
+  onChange,
+  serviceItems,
+}: {
+  section: LandingSection;
+  onChange: (section: LandingSection) => void;
+  serviceItems?: LandingSection;
+}) {
   if (section.type === "hero") {
     return (
       <>
@@ -449,10 +466,83 @@ function SectionFields({ section, onChange }: { section: LandingSection; onChang
     );
   }
   if (section.type === "contact") {
+    const services =
+      serviceItems && serviceItems.type === "services"
+        ? serviceItems.items.map((item) => ({ id: item.id, title: item.title }))
+        : [];
+    const moveOption = (index: number, direction: -1 | 1) => {
+      const next = index + direction;
+      if (next < 0 || next >= section.options.length) return;
+      const options = section.options.slice();
+      const [item] = options.splice(index, 1);
+      options.splice(next, 0, item);
+      onChange({ ...section, options });
+    };
     return (
       <>
         <Field fieldId="heading" label="Título" value={section.heading} onChange={(heading) => onChange({ ...section, heading })} />
         <Field fieldId="intro" label="Texto" value={section.intro} onChange={(intro) => onChange({ ...section, intro })} multiline />
+        <label className="flex min-h-11 items-center gap-3 text-sm font-semibold text-slate-700" data-field="allowMultiple">
+          <input
+            type="checkbox"
+            className="h-5 w-5"
+            checked={section.allowMultiple}
+            onChange={(e) => onChange({ ...section, allowMultiple: e.target.checked })}
+          />
+          Permitir elegir varios servicios
+        </label>
+        <div className="space-y-2" data-field="options" tabIndex={-1}>
+          <p className="text-sm font-semibold text-slate-700">Opciones del formulario</p>
+          {section.options.map((item, index) => (
+            <div key={item.id} className="flex items-center gap-2">
+              <input
+                value={item.title}
+                onChange={(e) => {
+                  const options = section.options.slice();
+                  options[index] = { ...item, title: e.target.value };
+                  onChange({ ...section, options });
+                }}
+                className="min-h-11 min-w-0 flex-1 rounded-md border border-slate-200 px-3 text-base"
+                aria-label={`Opción ${index + 1}`}
+              />
+              <button type="button" className="min-h-11 rounded-md border border-slate-200 px-2 text-xs font-semibold" onClick={() => moveOption(index, -1)}>Subir</button>
+              <button type="button" className="min-h-11 rounded-md border border-slate-200 px-2 text-xs font-semibold" onClick={() => moveOption(index, 1)}>Bajar</button>
+              <button type="button" className="min-h-11 px-2 text-xs font-semibold text-red-600" onClick={() => onChange({ ...section, options: section.options.filter((_, itemIndex) => itemIndex !== index) })}>Quitar</button>
+            </div>
+          ))}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="min-h-11 text-sm font-semibold text-slate-700"
+              onClick={() =>
+                onChange({
+                  ...section,
+                  options: [...section.options, { id: `opt-${Date.now().toString(36)}`, title: "Nuevo servicio" }],
+                })
+              }
+            >
+              + Opción
+            </button>
+            {services.length > 0 && (
+              <button
+                type="button"
+                className="min-h-11 text-sm font-semibold text-slate-700"
+                onClick={() => {
+                  const options = services.slice();
+                  if (!options.some((item) => item.id === "otro" || item.title.trim().toLowerCase() === "otro")) {
+                    options.push({ id: "otro", title: "Otro" });
+                  }
+                  onChange({ ...section, options });
+                }}
+              >
+                Traer de la sección Servicios
+              </button>
+            )}
+          </div>
+          <p className="text-xs leading-5 text-slate-500">
+            Estas opciones son las del formulario. Puedes editarlas aquí aunque también existan en la sección Servicios.
+          </p>
+        </div>
       </>
     );
   }
