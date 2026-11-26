@@ -46,6 +46,7 @@ export function SendToBufferDialog({
   const [text, setText] = useState("");
   const [mode, setMode] = useState<"queue" | "now" | "custom">("queue");
   const [igType, setIgType] = useState<"post" | "story" | "reel">("post");
+  const [tiktokTitle, setTiktokTitle] = useState("");
   const [when, setWhen] = useState("");
   const [daily, setDaily] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -81,7 +82,9 @@ export function SendToBufferDialog({
       hashtags = Array.isArray(body.asset.hashtags) ? body.asset.hashtags : [];
       onUpdated?.({ ...body.asset, caption, hashtags });
     }
-    setText(postText(caption, hashtags));
+    const draft = postText(caption, hashtags);
+    setText(draft);
+    setTiktokTitle((draft.split("\n").map((part) => part.trim()).find(Boolean) || "").slice(0, 90));
     setCopyState("ready");
   }
 
@@ -155,6 +158,7 @@ export function SendToBufferDialog({
           channelIds: channels,
           mode,
           instagramType: igType,
+          tiktokTitle: tiktokTitle.trim(),
           dueAt: mode === "custom" ? new Date(when).toISOString() : null,
           addToDaily: daily,
           creativeId: asset!.id,
@@ -265,7 +269,7 @@ export function SendToBufferDialog({
                   </Link>
                 </div>
               )}
-              <textarea className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-800" rows={6} maxLength={2200} value={text} onChange={(event) => setText(event.target.value)} />
+              <textarea className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-800" rows={6} maxLength={5000} value={text} onChange={(event) => setText(event.target.value)} />
               <p className="mt-1 text-[11px] text-slate-500">{L("Se envía la caption, una línea en blanco y los hashtags.", "The caption, a blank line, and the hashtags are sent together.")}</p>
             </div>
             <div className="flex flex-wrap gap-2 text-sm">
@@ -302,6 +306,31 @@ export function SendToBufferDialog({
                 <p className="mt-1 text-[11px] text-slate-500">
                   {L("Un video suelto se publica como Reel. Historia no va al feed.", "A single video is published as a Reel. Stories are not shared to the feed.")}
                 </p>
+              </div>
+            )}
+            {list.some((channel) => channels.includes(channel.id) && channel.service.toLowerCase() === "tiktok") && (
+              <div>
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{L("TikTok", "TikTok")}</p>
+                {asset.kind === "video" ? (
+                  <p className="text-xs text-slate-600">
+                    {L("Se envía como video. El texto no puede pasar de 2200 caracteres; si se pasa, se recorta.", "Sent as a video. The caption cannot pass 2,200 characters; extra text is trimmed.")}
+                  </p>
+                ) : (
+                  <>
+                    <p className="mb-1 text-xs text-slate-600">
+                      {L("Una imagen se publica como foto de TikTok. Varias imágenes van en carrusel. El texto puede tener hasta 4000 caracteres.", "An image is published as a TikTok photo. Several images become a carousel. The caption can be up to 4,000 characters.")}
+                    </p>
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      {L("Título de la foto", "Photo title")}
+                      <input className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-normal normal-case" maxLength={90} value={tiktokTitle} onChange={(event) => setTiktokTitle(event.target.value.slice(0, 90))} />
+                    </label>
+                  </>
+                )}
+                {text.length > (asset.kind === "video" ? 2200 : 4000) && (
+                  <p className="mt-1 text-xs text-amber-800">
+                    {L("El texto supera el límite de TikTok y se recortará al enviar.", "The text is over TikTok's limit and will be trimmed when sent.")}
+                  </p>
+                )}
               </div>
             )}
             {mode === "custom" && (

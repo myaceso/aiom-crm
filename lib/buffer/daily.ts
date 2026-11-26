@@ -76,6 +76,7 @@ export async function deliverToChannels(opts: {
   warning: string | null;
   now: Date;
   instagramType?: InstagramPlacement;
+  tiktokTitle?: string;
   createPost: BufferClient["createPost"];
 }): Promise<BufferSendLog[]> {
   const logs: BufferSendLog[] = [];
@@ -118,10 +119,13 @@ export async function deliverToChannels(opts: {
     if (ch.isQueuePaused && opts.mode === "addToQueue") {
       base.warning = [base.warning, "La cola de este canal está en pausa en Buffer; no se publicará hasta que la reanudes."].filter(Boolean).join(" ");
     }
+    const hasVideo = opts.media.some((item) => item.kind === "video");
     const placement = buildServiceMetadata(ch.service, {
       instagramType: opts.instagramType,
-      hasVideo: opts.media.some((item) => item.kind === "video"),
+      hasVideo,
+      hasImage: opts.media.some((item) => item.kind === "image"),
       text: opts.text,
+      tiktokTitle: opts.tiktokTitle,
     });
     if (placement.error) {
       base.error = placement.error;
@@ -129,10 +133,12 @@ export async function deliverToChannels(opts: {
       continue;
     }
     if (placement.warning) base.warning = [base.warning, placement.warning].filter(Boolean).join(" ");
+    const text = placement.text ?? opts.text;
+    base.text = text.slice(0, 500);
     try {
       const post = await opts.createPost({
         channelId: ch.id,
-        text: opts.text,
+        text,
         mode: opts.mode,
         dueAt: due,
         media: opts.media,
