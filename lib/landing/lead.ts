@@ -23,7 +23,9 @@ export type ValidLandingLead = {
   name: string;
   phone: string;
   email: string;
+  /** First selected service. Kept so older readers still see one id. */
   service: string;
+  services: string[];
   message: string;
   utm: LandingUtm;
 };
@@ -55,9 +57,23 @@ function cleanUtm(value: unknown): string | undefined {
   return text || undefined;
 }
 
+function readServiceIds(record: Record<string, unknown>): string[] {
+  const ids: string[] = [];
+  const push = (value: unknown) => {
+    const id = cleanText(value, 40);
+    if (id && !ids.includes(id)) ids.push(id);
+  };
+  if (Array.isArray(record.services)) {
+    for (const item of record.services) push(item);
+  }
+  if (!ids.length) push(record.service);
+  return ids.slice(0, 12);
+}
+
 export function validateLandingLead(
   body: unknown,
-  allowedServices?: readonly string[]
+  allowedServices?: readonly string[],
+  options?: { multiple?: boolean }
 ): LandingValidation {
   const record = asRecord(body);
   if (!record) return { ok: false, error: "invalid_name" };
@@ -79,13 +95,20 @@ export function validateLandingLead(
   const email = cleanText(record.email, 120).toLowerCase();
   if (!EMAIL_RE.test(email)) return { ok: false, error: "invalid_email" };
 
-  const service = cleanText(record.service, 40);
   const allowed = new Set(
     (allowedServices && allowedServices.length ? allowedServices : Array.from(SERVICE_IDS)).map((id) =>
       id.trim().slice(0, 40)
     )
   );
-  if (!allowed.has(service)) return { ok: false, error: "invalid_service" };
+  const services = readServiceIds(record).filter((id) => allowed.has(id));
+  const requested = readServiceIds(record);
+  if (!requested.length || requested.some((id) => !allowed.has(id))) {
+    return { ok: false, error: "invalid_service" };
+  }
+  if (options?.multiple === false && requested.length > 1) {
+    return { ok: false, error: "invalid_service" };
+  }
+  const chosen = services;
 
   const message = cleanText(record.message, 1000);
   if (typeof record.message === "string" && record.message.trim().length > 1000) {
@@ -110,7 +133,8 @@ export function validateLandingLead(
       name,
       phone,
       email,
-      service,
+      service: chosen[0],
+      services: chosen,
       message,
       utm,
     },
@@ -124,7 +148,7 @@ export function serviceLabel(id: string, labels?: Record<string, string>): strin
 function attributionOf(lead: ValidLandingLead): LeadAttribution {
   const attribution: LeadAttribution = {
     page: "finanzas",
-    service: lead.service,
+    service: lead.services.join(","),
   };
   if (lead.utm.source) attribution.utmSource = lead.utm.source;
   if (lead.utm.medium) attribution.utmMedium = lead.utm.medium;
@@ -158,11 +182,11 @@ export function buildLandingContact(
   const contactId =
     id ||
     `ld_${now.getTime().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-  const label = serviceLabel(lead.service, labels);
+  const labelsForLead = lead.services.map((id) => serviceLabel(id, labels));
   const attribution = attributionOf(lead);
   const note = [
     `Solicitud desde la landing «${LANDING_BRAND}».`,
-    `Servicio de interés: ${label}`,
+    `Servicios de interés: ${labelsForLead.join("; ")}`,
     lead.message ? `Mensaje: ${lead.message}` : "Mensaje: (sin mensaje)",
     "Consentimiento para contacto: sí",
     `Atribución: ${attributionLine(attribution)}`,
@@ -175,7 +199,7 @@ export function buildLandingContact(
     email: lead.email,
     phone: lead.phone,
     company: "",
-    tags: ["landing", label],
+    tags: ["landing", ...labelsForLead.filter((label, index, all) => all.indexOf(label) === index)],
     source: "landing",
     status: "lead",
     notes: [
@@ -190,7 +214,7 @@ export function buildLandingContact(
       {
         id: `${contactId}-t`,
         type: "note",
-        title: `Lead desde landing · ${label}`,
+        title: `Lead desde landing · ${labelsForLead.join(", ")}`,
         createdAt,
       },
     ],

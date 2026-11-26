@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { appendLandingLead } from "@/lib/landing/persist";
 import { buildLandingContact, validateLandingLead } from "@/lib/landing/lead";
-import { defaultLandingTemplate, serviceChoices } from "@/lib/landing/template";
+import { defaultLandingTemplate, formServiceOptions, sanitizeLandingTemplate } from "@/lib/landing/template";
 import { getPublishedLanding } from "@/lib/landing/templateStore";
 
 export const runtime = "nodejs";
@@ -40,8 +40,13 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => null);
   const published = await getPublishedLanding().catch(() => null);
-  const choices = serviceChoices(published ?? defaultLandingTemplate());
-  const parsed = validateLandingLead(body, choices.map((item) => item.id));
+  const template = sanitizeLandingTemplate(published ?? defaultLandingTemplate());
+  const form = formServiceOptions(template);
+  const parsed = validateLandingLead(
+    body,
+    form.options.map((item) => item.id),
+    { multiple: form.allowMultiple }
+  );
   if (!parsed.ok) {
     return NextResponse.json({ ok: false, error: parsed.error }, { status: 400 });
   }
@@ -50,7 +55,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const labels = Object.fromEntries(choices.map((item) => [item.id, item.title]));
+    const labels = Object.fromEntries(form.options.map((item) => [item.id, item.title]));
     const contact = buildLandingContact(parsed.lead, new Date(), undefined, labels);
     const saved = await appendLandingLead(contact);
     if (!saved.ok) {

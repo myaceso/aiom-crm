@@ -69,7 +69,17 @@ export type BenefitsSection = {
 export type FaqItem = { id: string; q: string; a: string };
 export type FaqSection = { id: string; type: "faq"; heading: string; items: FaqItem[] };
 
-export type ContactSection = { id: string; type: "contact"; heading: string; intro: string };
+export type ContactOption = { id: string; title: string };
+
+export type ContactSection = {
+  id: string;
+  type: "contact";
+  heading: string;
+  intro: string;
+  /** When false, the visitor can pick only one service. Missing means true. */
+  allowMultiple: boolean;
+  options: ContactOption[];
+};
 
 export type TextSection = { id: string; type: "text"; heading: string; body: string };
 export type ImageSection = { id: string; type: "image"; url: string; alt: string; caption: string };
@@ -145,6 +155,20 @@ function nid(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+export function defaultContactOptions(): ContactOption[] {
+  return [
+    ...LANDING_SERVICES.map((item) => ({ id: item.id, title: item.label })),
+    { id: "otro", title: "Otro" },
+  ];
+}
+
+function withOtro(options: ContactOption[]): ContactOption[] {
+  if (options.some((item) => item.id === "otro" || item.title.trim().toLowerCase() === "otro")) {
+    return options;
+  }
+  return [...options, { id: "otro", title: "Otro" }];
+}
+
 export function defaultLandingTemplate(): LandingTemplate {
   return {
     id: LANDING_PAGE_ID,
@@ -215,6 +239,8 @@ export function defaultLandingTemplate(): LandingTemplate {
         heading: "Cuéntanos qué necesitas",
         intro:
           "Déjanos tu nombre, teléfono y el servicio. Te contactamos para escuchar tu caso. No hace falta que tengas todos los papeles a la mano.",
+        allowMultiple: true,
+        options: defaultContactOptions(),
       },
     ],
   };
@@ -257,7 +283,14 @@ export function blankSection(type: LandingSectionType): LandingSection {
         items: [{ id: nid("faq"), q: "¿Nueva pregunta?", a: "" }],
       };
     case "contact":
-      return { id: "contact", type, heading: "Cuéntanos qué necesitas", intro: "" };
+      return {
+        id: "contact",
+        type,
+        heading: "Cuéntanos qué necesitas",
+        intro: "",
+        allowMultiple: true,
+        options: defaultContactOptions(),
+      };
     case "text":
       return { id, type, heading: "Texto", body: "" };
     case "image":
@@ -393,13 +426,23 @@ function sanitizeSection(value: unknown, fallbackContact: ContactSection): Landi
         }),
       };
     }
-    case "contact":
+    case "contact": {
+      const rawOptions = Array.isArray(record.options) ? record.options : [];
       return {
         id: "contact",
         type: "contact",
         heading: text(record.heading, 120, fallbackContact.heading),
         intro: text(record.intro, 600, fallbackContact.intro),
+        allowMultiple: record.allowMultiple === false ? false : true,
+        options: rawOptions.slice(0, 16).map((item, index) => {
+          const row = asRecord(item) ?? {};
+          return {
+            id: slugId(row.id, `opt-${index + 1}`),
+            title: text(row.title, 80, "Servicio"),
+          };
+        }),
       };
+    }
     case "text":
       return { id, type: "text", heading: text(record.heading, 120), body: text(record.body, 2000) };
     case "image":
@@ -441,6 +484,15 @@ export function sanitizeLandingTemplate(input: unknown): LandingTemplate {
   if (!withoutExtraContacts.some((section) => section.type === "contact")) {
     withoutExtraContacts.push(contactFallback);
   }
+  for (const section of withoutExtraContacts) {
+    if (section.type !== "contact" || section.options.length > 0) continue;
+    const services = withoutExtraContacts.find((item) => item.type === "services");
+    const seeded =
+      services && services.type === "services" && services.items.length
+        ? withOtro(services.items.map((item) => ({ id: item.id, title: item.title })))
+        : defaultContactOptions();
+    section.options = seeded;
+  }
   return {
     id: LANDING_PAGE_ID,
     path: LANDING_PATH,
@@ -474,12 +526,31 @@ export function moveSection(sections: LandingSection[], index: number, direction
   return copy;
 }
 
-export function serviceChoices(template: LandingTemplate): { id: string; title: string }[] {
-  const section = template.sections.find((item) => item.type === "services");
-  if (section && section.type === "services" && section.items.length) {
-    return section.items.map((item) => ({ id: item.id, title: item.title }));
+/** Options shown on the contact form. Old saved pages without a list inherit the Services section, plus Otro. */
+export function formServiceOptions(template: LandingTemplate): {
+  allowMultiple: boolean;
+  options: ContactOption[];
+} {
+  const contact = template.sections.find((item) => item.type === "contact");
+  const services = template.sections.find((item) => item.type === "services");
+  const fromServices =
+    services && services.type === "services"
+      ? services.items.map((item) => ({ id: item.id, title: item.title }))
+      : [];
+  if (contact && contact.type === "contact" && contact.options?.length) {
+    return {
+      allowMultiple: contact.allowMultiple !== false,
+      options: contact.options,
+    };
   }
-  return LANDING_SERVICES.map((item) => ({ id: item.id, title: item.label }));
+  if (fromServices.length) {
+    return { allowMultiple: true, options: withOtro(fromServices) };
+  }
+  return { allowMultiple: true, options: defaultContactOptions() };
+}
+
+export function serviceChoices(template: LandingTemplate): { id: string; title: string }[] {
+  return formServiceOptions(template).options;
 }
 
 export function googleFontsHref(theme: LandingTheme): string {
