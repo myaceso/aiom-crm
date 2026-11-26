@@ -255,6 +255,7 @@ export async function sendBufferPost(
     addToDaily?: boolean;
     creativeId?: string;
     instagramType?: string;
+    tiktokTitle?: string;
   }
 ) {
   const ran = await withBufferLock(userId, async () => {
@@ -308,6 +309,7 @@ export async function sendBufferPost(
       warning: null,
       now: new Date(),
       instagramType,
+      tiktokTitle: typeof input.tiktokTitle === "string" ? input.tiktokTitle : undefined,
       createPost: clientFor(token).createPost,
     });
     cfg.logs = [...logs.slice().reverse(), ...cfg.logs].slice(0, 200);
